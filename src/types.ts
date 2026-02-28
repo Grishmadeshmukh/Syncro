@@ -1,15 +1,18 @@
+export type WorkflowMode = 'upload-both' | 'script-video' | 'video-only';
+
 export interface VideoClip {
   id: string;
   file: File;
   url: string;
-  duration: number;
-  startTime: number; // Start time in the overall timeline
+  duration: number;         // original file duration (never mutated)
+  trimmedDuration?: number; // effective display/playback duration after cuts
+  startTime: number;        // start time in the overall timeline
   name: string;
   analysis?: string;
 }
 
 export interface Voiceover {
-  file: File;
+  file?: File;              // undefined for AI-generated audio
   url: string;
   duration: number;
   transcription?: string;
