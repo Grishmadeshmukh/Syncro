@@ -13,7 +13,8 @@ import {
   Info,
   Play,
   Pause,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -135,6 +136,44 @@ export default function App() {
     setVideoClips(videoClips.filter(c => c.id !== id));
   };
 
+  const handleDownload = () => {
+    const totalDuration = Math.max(
+      voiceover?.duration || 0,
+      ...videoClips.map((c) => c.startTime + c.duration)
+    );
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      voiceover: voiceover
+        ? {
+            fileName: voiceover.file.name,
+            duration: voiceover.duration,
+            transcription: voiceover.transcription,
+          }
+        : null,
+      videoClips: videoClips
+        .slice()
+        .sort((a, b) => a.startTime - b.startTime)
+        .map((clip) => ({
+          id: clip.id,
+          name: clip.name,
+          startTime: clip.startTime,
+          duration: clip.duration,
+          endTime: clip.startTime + clip.duration,
+          analysis: clip.analysis,
+        })),
+      totalDuration,
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `syncvoice-alignment-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 font-sans">
       {/* Header */}
@@ -153,6 +192,17 @@ export default function App() {
             <Clock className="w-3.5 h-3.5" />
             {currentTime.toFixed(2)}s
           </div>
+          <button
+            onClick={handleDownload}
+            disabled={videoClips.length === 0}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all",
+              "bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            )}
+          >
+            <Download className="w-4 h-4" />
+            Download
+          </button>
         </div>
       </header>
 
