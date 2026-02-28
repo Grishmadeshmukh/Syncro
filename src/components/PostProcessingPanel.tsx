@@ -57,10 +57,10 @@ function TabButton({
       className={cn(
         'flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all whitespace-nowrap',
         active
-          ? 'border-emerald-500 text-emerald-600'
+          ? 'border-violet-400 text-violet-300'
           : locked
-          ? 'border-transparent text-zinc-300 cursor-not-allowed'
-          : 'border-transparent text-zinc-500 hover:text-zinc-800 hover:border-zinc-300'
+          ? 'border-transparent text-violet-700 cursor-not-allowed'
+          : 'border-transparent text-violet-500 hover:text-violet-100 hover:border-violet-600'
       )}
     >
       {locked ? <Lock className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}
@@ -73,10 +73,10 @@ function TabButton({
 function LockedState({ message }: { message: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center gap-3">
-      <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center">
-        <Lock className="w-5 h-5 text-zinc-400" />
+      <div className="w-12 h-12 bg-violet-900/40 rounded-full flex items-center justify-center">
+        <Lock className="w-5 h-5 text-violet-500" />
       </div>
-      <p className="text-sm text-zinc-400 max-w-xs">{message}</p>
+      <p className="text-sm text-violet-500 max-w-xs">{message}</p>
     </div>
   );
 }
@@ -100,10 +100,10 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
       className={cn(
         'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all',
         copied
-          ? 'bg-emerald-100 text-emerald-600'
+          ? 'bg-violet-800/50 text-violet-300'
           : failed
-          ? 'bg-red-100 text-red-600'
-          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200',
+          ? 'bg-red-900/30 text-red-400'
+          : 'bg-violet-900/40 text-violet-400 hover:bg-violet-800/60',
         className
       )}
     >
@@ -165,8 +165,8 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-zinc-800">YouTube-Style Description</p>
-          <p className="text-xs text-zinc-400 mt-0.5">Auto-generated summary + chapter timestamps</p>
+          <p className="text-sm font-semibold text-violet-100">YouTube-Style Description</p>
+          <p className="text-xs text-violet-500 mt-0.5">Auto-generated summary + chapter timestamps</p>
         </div>
         <button
           onClick={handleGenerate}
@@ -174,8 +174,8 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
           className={cn(
             'flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all',
             isGenerating
-              ? 'bg-zinc-100 text-zinc-400 cursor-wait'
-              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200'
+              ? 'bg-violet-900/40 text-violet-600 cursor-wait'
+              : 'bg-violet-600 text-white hover:bg-violet-500 shadow-sm shadow-violet-900/50'
           )}
         >
           {isGenerating ? (
@@ -190,7 +190,7 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
       </div>
 
       {error && (
-        <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/30 rounded-xl px-4 py-3">
           {error}
         </div>
       )}
@@ -203,18 +203,18 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
             className="space-y-4"
           >
             {/* Summary */}
-            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 space-y-2">
+            <div className="bg-violet-950/50 border border-violet-700/30 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Summary</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-violet-500">Summary</span>
                 <CopyButton text={description.summary} />
               </div>
-              <p className="text-sm text-zinc-700 leading-relaxed">{description.summary}</p>
+              <p className="text-sm text-violet-200 leading-relaxed">{description.summary}</p>
             </div>
 
             {/* Chapters */}
-            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 space-y-2">
+            <div className="bg-violet-950/50 border border-violet-700/30 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-violet-500">
                   Chapters ({description.chapters.length})
                 </span>
                 <CopyButton
@@ -226,21 +226,21 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
               <div className="space-y-1 mt-1">
                 {description.chapters.map((ch, i) => (
                   <div key={i} className="flex items-center gap-3 py-1">
-                    <span className="font-mono text-xs font-bold text-emerald-600 w-10 flex-shrink-0">
+                    <span className="font-mono text-xs font-bold text-violet-400 w-10 flex-shrink-0">
                       {formatTimestamp(ch.time)}
                     </span>
-                    <span className="text-sm text-zinc-700">{ch.label}</span>
+                    <span className="text-sm text-violet-200">{ch.label}</span>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Hashtags */}
-            <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-4 space-y-2">
+            <div className="bg-violet-950/50 border border-violet-700/30 rounded-2xl p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <button
                   onClick={() => setShowHashtags(v => !v)}
-                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors"
+                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-violet-500 hover:text-violet-300 transition-colors"
                 >
                   <Hash className="w-3 h-3" />
                   Hashtags ({description.hashtags.length})
@@ -260,7 +260,7 @@ function DescriptionTab({ voiceover, videoClips }: { voiceover: Voiceover; video
                       {description.hashtags.map((tag, i) => (
                         <span
                           key={i}
-                          className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-lg border border-emerald-100"
+                          className="px-2.5 py-1 bg-violet-800/50 text-violet-300 text-xs font-medium rounded-lg border border-violet-600/30"
                         >
                           #{tag}
                         </span>
@@ -328,16 +328,16 @@ function CaptionsTab({
   return (
     <div className="space-y-6">
       {/* Live preview toggle */}
-      <div className="flex items-center justify-between p-4 bg-zinc-50 border border-zinc-100 rounded-2xl">
+      <div className="flex items-center justify-between p-4 bg-violet-950/50 border border-violet-700/30 rounded-2xl">
         <div>
-          <p className="text-sm font-semibold text-zinc-800">Live Caption Preview</p>
-          <p className="text-xs text-zinc-400 mt-0.5">Show captions on the video preview above</p>
+          <p className="text-sm font-semibold text-violet-100">Live Caption Preview</p>
+          <p className="text-xs text-violet-500 mt-0.5">Show captions on the video preview above</p>
         </div>
         <button
           onClick={() => onEnabledChange(!captionsEnabled)}
           className={cn(
             'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-            captionsEnabled ? 'bg-emerald-500' : 'bg-zinc-200'
+            captionsEnabled ? 'bg-violet-500' : 'bg-violet-900/70'
           )}
         >
           <span
@@ -351,7 +351,7 @@ function CaptionsTab({
 
       {/* Caption style */}
       <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Style</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Style</p>
         <div className="grid grid-cols-3 gap-3">
           {modeOptions.map(opt => (
             <button
@@ -360,12 +360,12 @@ function CaptionsTab({
               className={cn(
                 'p-3 rounded-xl border text-left transition-all',
                 captionStyle.mode === opt.value
-                  ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500/20'
-                  : 'border-zinc-200 hover:border-zinc-300 bg-white'
+                  ? 'border-violet-400 bg-violet-800/50 ring-1 ring-violet-400/20'
+                  : 'border-violet-700/50 hover:border-violet-600 bg-violet-900/30'
               )}
             >
-              <p className="text-xs font-semibold text-zinc-800">{opt.label}</p>
-              <p className="text-[10px] text-zinc-400 mt-0.5">{opt.desc}</p>
+              <p className="text-xs font-semibold text-violet-100">{opt.label}</p>
+              <p className="text-[10px] text-violet-500 mt-0.5">{opt.desc}</p>
             </button>
           ))}
         </div>
@@ -374,8 +374,8 @@ function CaptionsTab({
       {/* Font size */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Font Size</p>
-          <span className="text-xs font-mono font-semibold text-zinc-600">{captionStyle.fontSize}px</span>
+          <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Font Size</p>
+          <span className="text-xs font-mono font-semibold text-violet-300">{captionStyle.fontSize}px</span>
         </div>
         <input
           type="range"
@@ -383,41 +383,41 @@ function CaptionsTab({
           max={36}
           value={captionStyle.fontSize}
           onChange={e => onStyleChange({ ...captionStyle, fontSize: Number(e.target.value) })}
-          className="w-full h-1.5 bg-zinc-200 rounded-full appearance-none cursor-pointer accent-emerald-500"
+          className="w-full h-1.5 bg-violet-900/60 rounded-full appearance-none cursor-pointer accent-violet-500"
         />
       </div>
 
       {/* Colors */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Text Color</p>
-          <div className="flex items-center gap-3 p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Text Color</p>
+          <div className="flex items-center gap-3 p-2.5 bg-violet-950/50 border border-violet-700/30 rounded-xl">
             <input
               type="color"
               value={captionStyle.color}
               onChange={e => onStyleChange({ ...captionStyle, color: e.target.value })}
               className="w-8 h-8 rounded-lg border-0 cursor-pointer bg-transparent"
             />
-            <span className="text-xs font-mono text-zinc-500">{captionStyle.color}</span>
+            <span className="text-xs font-mono text-violet-400">{captionStyle.color}</span>
           </div>
         </div>
         <div className="space-y-2">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Background</p>
-          <div className="flex items-center gap-3 p-2.5 bg-zinc-50 border border-zinc-200 rounded-xl">
+          <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Background</p>
+          <div className="flex items-center gap-3 p-2.5 bg-violet-950/50 border border-violet-700/30 rounded-xl">
             <input
               type="color"
               value={captionStyle.bgColor}
               onChange={e => onStyleChange({ ...captionStyle, bgColor: e.target.value })}
               className="w-8 h-8 rounded-lg border-0 cursor-pointer bg-transparent"
             />
-            <span className="text-xs font-mono text-zinc-500">{captionStyle.bgColor}</span>
+            <span className="text-xs font-mono text-violet-400">{captionStyle.bgColor}</span>
           </div>
         </div>
       </div>
 
       {/* Position */}
       <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Position</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Position</p>
         <div className="flex gap-3">
           {(['bottom', 'top'] as const).map(pos => (
             <button
@@ -426,8 +426,8 @@ function CaptionsTab({
               className={cn(
                 'flex-1 py-2 text-xs font-semibold rounded-xl border capitalize transition-all',
                 captionStyle.position === pos
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
-                  : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300'
+                  ? 'border-violet-400 bg-violet-800/50 text-violet-300'
+                  : 'border-violet-700/50 bg-violet-900/30 text-violet-500 hover:border-violet-600'
               )}
             >
               {pos}
@@ -437,19 +437,19 @@ function CaptionsTab({
       </div>
 
       {/* Download */}
-      <div className="pt-2 border-t border-zinc-100">
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-3">Export Caption File</p>
+      <div className="pt-2 border-t border-violet-700/30">
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-500 mb-3">Export Caption File</p>
         <div className="flex gap-3">
           <button
             onClick={handleDownloadSRT}
-            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-violet-900/30 border border-violet-700/50 text-violet-300 rounded-xl hover:border-violet-500 hover:bg-violet-800/50 transition-all"
           >
             <Download className="w-3.5 h-3.5" />
             Download SRT
           </button>
           <button
             onClick={handleDownloadVTT}
-            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-violet-900/30 border border-violet-700/50 text-violet-300 rounded-xl hover:border-violet-500 hover:bg-violet-800/50 transition-all"
           >
             <Download className="w-3.5 h-3.5" />
             Download VTT
@@ -526,8 +526,8 @@ function ThumbnailsTab({ voiceover, videoClips }: { voiceover: Voiceover; videoC
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-zinc-800">Thumbnail Candidates</p>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-sm font-semibold text-violet-100">Thumbnail Candidates</p>
+          <p className="text-xs text-violet-500 mt-0.5">
             AI finds the most compelling moments and overlays a key quote
           </p>
         </div>
@@ -537,8 +537,8 @@ function ThumbnailsTab({ voiceover, videoClips }: { voiceover: Voiceover; videoC
           className={cn(
             'flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all',
             isGenerating
-              ? 'bg-zinc-100 text-zinc-400 cursor-wait'
-              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200'
+              ? 'bg-violet-900/40 text-violet-600 cursor-wait'
+              : 'bg-violet-600 text-white hover:bg-violet-500 shadow-sm shadow-violet-900/50'
           )}
         >
           {isGenerating ? (
@@ -553,14 +553,14 @@ function ThumbnailsTab({ voiceover, videoClips }: { voiceover: Voiceover; videoC
       </div>
 
       {isGenerating && progress && (
-        <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700">
+        <div className="flex items-center gap-3 p-3 bg-violet-900/50 border border-violet-700/30 rounded-xl text-xs text-violet-300">
           <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" />
           {progress}
         </div>
       )}
 
       {error && (
-        <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+        <div className="text-xs text-red-400 bg-red-950/30 border border-red-900/30 rounded-xl px-4 py-3">
           {error}
         </div>
       )}
@@ -578,9 +578,9 @@ function ThumbnailsTab({ voiceover, videoClips }: { voiceover: Voiceover; videoC
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.05 }}
-                className="group rounded-2xl border border-zinc-200 overflow-hidden bg-white hover:border-emerald-300 hover:shadow-md transition-all"
+                className="group rounded-2xl border border-violet-700/50 overflow-hidden bg-violet-900/30 hover:border-violet-400 hover:shadow-lg hover:shadow-violet-900/30 transition-all"
               >
-                <div className="relative aspect-video bg-zinc-100">
+                <div className="relative aspect-video bg-black/50">
                   <img
                     src={thumb.imageDataUrl}
                     alt={thumb.quote}
@@ -593,13 +593,13 @@ function ThumbnailsTab({ voiceover, videoClips }: { voiceover: Voiceover; videoC
                   </div>
                 </div>
                 <div className="p-3 space-y-2">
-                  <p className="text-xs font-semibold text-zinc-800 line-clamp-1">"{thumb.quote}"</p>
-                  <p className="text-[10px] text-zinc-400 line-clamp-2">{thumb.reason}</p>
+                  <p className="text-xs font-semibold text-violet-100 line-clamp-1">"{thumb.quote}"</p>
+                  <p className="text-[10px] text-violet-500 line-clamp-2">{thumb.reason}</p>
                   <button
                     onClick={() =>
                       downloadDataUrl(thumb.imageDataUrl, `thumbnail-${i + 1}-${thumb.timestamp}s.jpg`)
                     }
-                    className="flex items-center gap-1.5 w-full justify-center py-1.5 text-xs font-semibold bg-zinc-50 border border-zinc-200 text-zinc-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all"
+                    className="flex items-center gap-1.5 w-full justify-center py-1.5 text-xs font-semibold bg-violet-900/40 border border-violet-700/50 text-violet-400 rounded-lg hover:bg-violet-800/50 hover:text-violet-300 hover:border-violet-500 transition-all"
                   >
                     <Download className="w-3.5 h-3.5" />
                     Download PNG
@@ -778,24 +778,24 @@ function ExportTab({
     <div className="space-y-6">
       {/* Asset Downloads */}
       <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Download Assets</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Download Assets</p>
         <div className="space-y-2">
           {voiceover && (
-            <div className="flex items-center justify-between p-3 bg-white border border-zinc-200 rounded-xl hover:border-zinc-300 transition-all">
+            <div className="flex items-center justify-between p-3 bg-violet-900/30 border border-violet-700/50 rounded-xl hover:border-violet-600 transition-all">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 bg-violet-500/20 text-violet-400 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Music className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-zinc-800 truncate max-w-[200px]">
+                  <p className="text-xs font-semibold text-violet-100 truncate max-w-[200px]">
                     {voiceover.file.name}
                   </p>
-                  <p className="text-[10px] text-zinc-400">{voiceover.duration.toFixed(1)}s · Audio</p>
+                  <p className="text-[10px] text-violet-500">{voiceover.duration.toFixed(1)}s · Audio</p>
                 </div>
               </div>
               <button
                 onClick={() => handleDownloadAsset(voiceover.url, voiceover.file.name)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-zinc-100 text-zinc-600 rounded-lg hover:bg-zinc-200 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-violet-900/40 text-violet-400 rounded-lg hover:bg-violet-800/60 transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
                 Download
@@ -806,22 +806,22 @@ function ExportTab({
           {videoClips.map(clip => (
             <div
               key={clip.id}
-              className="flex items-center justify-between p-3 bg-white border border-zinc-200 rounded-xl hover:border-zinc-300 transition-all"
+              className="flex items-center justify-between p-3 bg-violet-900/30 border border-violet-700/50 rounded-xl hover:border-violet-600 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-zinc-100 rounded-lg overflow-hidden flex-shrink-0">
+                <div className="w-8 h-8 bg-violet-900/60 rounded-lg overflow-hidden flex-shrink-0">
                   <video src={clip.url} className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-zinc-800 truncate max-w-[200px]">
+                  <p className="text-xs font-semibold text-violet-100 truncate max-w-[200px]">
                     {clip.name}
                   </p>
-                  <p className="text-[10px] text-zinc-400">{clip.duration.toFixed(1)}s · Video</p>
+                  <p className="text-[10px] text-violet-500">{clip.duration.toFixed(1)}s · Video</p>
                 </div>
               </div>
               <button
                 onClick={() => handleDownloadAsset(clip.url, clip.name)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-zinc-100 text-zinc-600 rounded-lg hover:bg-zinc-200 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-violet-900/40 text-violet-400 rounded-lg hover:bg-violet-800/60 transition-all"
               >
                 <Download className="w-3.5 h-3.5" />
                 Download
@@ -834,18 +834,18 @@ function ExportTab({
       {/* Caption Downloads */}
       {voiceover?.segments && voiceover.segments.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Caption Files</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-violet-500">Caption Files</p>
           <div className="flex gap-3">
             <button
               onClick={handleDownloadSRT}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-violet-900/30 border border-violet-700/50 text-violet-300 rounded-xl hover:border-violet-500 hover:bg-violet-800/50 transition-all"
             >
               <Download className="w-3.5 h-3.5" />
               SRT Captions
             </button>
             <button
               onClick={handleDownloadVTT}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-white border border-zinc-200 text-zinc-700 rounded-xl hover:border-zinc-400 hover:bg-zinc-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-violet-900/30 border border-violet-700/50 text-violet-300 rounded-xl hover:border-violet-500 hover:bg-violet-800/50 transition-all"
             >
               <Download className="w-3.5 h-3.5" />
               VTT Captions
@@ -857,17 +857,17 @@ function ExportTab({
       {/* Combined Video Export */}
       {voiceover && videoClips.length > 0 && (
         <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+          <p className="text-xs font-bold uppercase tracking-widest text-violet-500">
             Combined Export
           </p>
-          <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-4">
+          <div className="p-4 bg-violet-950/50 border border-violet-700/30 rounded-2xl space-y-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 bg-zinc-800 text-white rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 bg-violet-800/60 text-violet-300 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Film className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-zinc-800">Export Combined Video</p>
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-sm font-semibold text-violet-100">Export Combined Video</p>
+                <p className="text-xs text-violet-500 mt-0.5">
                   Records the aligned sequence with audio
                   {captionsEnabled ? ' and burned-in captions' : ''}.
                   Saves as MP4 (H.264) when supported by your browser, otherwise WebM.
@@ -877,13 +877,13 @@ function ExportTab({
 
             {isExporting && (
               <div className="space-y-2">
-                <div className="flex justify-between text-xs font-medium text-zinc-600">
+                <div className="flex justify-between text-xs font-medium text-violet-400">
                   <span>Recording…</span>
                   <span>{Math.round(exportProgress * 100)}%</span>
                 </div>
-                <div className="h-2 bg-zinc-200 rounded-full overflow-hidden">
+                <div className="h-2 bg-violet-900/60 rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-emerald-500 rounded-full"
+                    className="h-full bg-violet-500 rounded-full"
                     style={{ width: `${exportProgress * 100}%` }}
                     transition={{ duration: 0.1 }}
                   />
@@ -895,7 +895,7 @@ function ExportTab({
               {!isExporting ? (
                 <button
                   onClick={handleExportVideo}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-zinc-900 text-white rounded-xl hover:bg-zinc-700 transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-violet-600 text-white rounded-xl hover:bg-violet-500 transition-all"
                 >
                   <Film className="w-4 h-4" />
                   Start Export
@@ -903,12 +903,12 @@ function ExportTab({
               ) : (
                 <button
                   onClick={() => stopRef.current?.()}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-900/30 text-red-400 rounded-xl hover:bg-red-900/50 transition-all"
                 >
                   Cancel
                 </button>
               )}
-              <span className="flex items-center text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              <span className="flex items-center text-[10px] font-bold text-violet-500 uppercase tracking-wider">
                 MP4 / WebM
               </span>
             </div>
@@ -1036,29 +1036,29 @@ export function PostProcessingPanel({
   ];
 
   return (
-    <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+    <div className="bg-violet-900/20 border border-violet-700/50 rounded-3xl overflow-hidden shadow-sm">
       {/* Header */}
       <div className="px-6 pt-5 pb-0">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Film className="w-4 h-4 text-white" />
+          <div className="w-8 h-8 bg-violet-500/30 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Film className="w-4 h-4 text-violet-300" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-zinc-900">Post-Processing & Export</h2>
-            <p className="text-[10px] text-zinc-400">
+            <h2 className="text-sm font-bold text-violet-100">Post-Processing & Export</h2>
+            <p className="text-[10px] text-violet-500">
               {hasTranscription
                 ? 'AI analysis complete — all features unlocked'
                 : 'Run AI Auto-Align to unlock generation features'}
             </p>
           </div>
           {!hasTranscription && (
-            <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-bold rounded-full uppercase tracking-wider">
+            <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-amber-900/20 border border-amber-600/40 text-amber-400 text-[10px] font-bold rounded-full uppercase tracking-wider">
               <Lock className="w-2.5 h-2.5" />
               Pending Analysis
             </span>
           )}
           {hasTranscription && (
-            <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-600 text-[10px] font-bold rounded-full uppercase tracking-wider">
+            <span className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-violet-500/20 border border-violet-500/30 text-violet-300 text-[10px] font-bold rounded-full uppercase tracking-wider">
               <Check className="w-2.5 h-2.5" />
               Ready
             </span>
@@ -1066,7 +1066,7 @@ export function PostProcessingPanel({
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-0 border-b border-zinc-100 -mx-6 px-6">
+        <div className="flex gap-0 border-b border-violet-700/40 -mx-6 px-6">
           {tabs.map(tab => (
             <TabButton
               key={tab.id}

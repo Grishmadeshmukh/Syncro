@@ -1,5 +1,5 @@
 {
-  "name": "SyncVoice: AI Video Aligner",
+  "name": "Syncro – AI Video Aligner",
   "description": "AI-powered tool to automatically align multiple video clips with a voiceover track using Gemini's multimodal analysis.",
   "requestFramePermissions": []
 }

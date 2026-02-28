@@ -262,20 +262,20 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 font-sans">
+    <div className="min-h-screen bg-[#1a1625] text-violet-100 font-sans">
       {/* Header */}
-      <header className="h-16 border-b bg-white flex items-center justify-between px-8 sticky top-0 z-50">
+      <header className="h-16 border-b border-violet-800/50 bg-violet-950/80 flex items-center justify-between px-8 sticky top-0 z-50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200">
+          <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight">SyncVoice</h1>
-            <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">AI Video Aligner</p>
+            <h1 className="text-lg font-bold tracking-tight text-white">Syncro</h1>
+            <p className="text-[10px] text-violet-400 uppercase tracking-widest font-bold">AI Video Aligner</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-100 rounded-lg text-xs font-medium text-zinc-600">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-900/50 border border-violet-700/50 rounded-lg text-xs font-medium text-violet-300">
             <Clock className="w-3.5 h-3.5" />
             {currentTime.toFixed(2)}s
           </div>
@@ -287,7 +287,7 @@ export default function App() {
         <div className="col-span-3 space-y-6">
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-violet-400 flex items-center gap-2">
                 <Music className="w-4 h-4" /> Voiceover
               </h2>
             </div>
@@ -300,27 +300,27 @@ export default function App() {
                 icon={<Music className="w-6 h-6" />}
               />
             ) : (
-              <div className="bg-white border rounded-2xl p-4 shadow-sm group">
+              <div className="bg-violet-900/30 border border-violet-700/50 rounded-2xl p-4 shadow-sm group">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-violet-500/30 text-violet-300 rounded-lg flex items-center justify-center">
                       <Music className="w-4 h-4" />
                     </div>
                     <div className="overflow-hidden">
-                      <p className="text-sm font-medium truncate w-32">{voiceover.file.name}</p>
-                      <p className="text-[10px] text-zinc-400">{(voiceover.duration).toFixed(1)}s</p>
+                      <p className="text-sm font-medium truncate w-32 text-violet-100">{voiceover.file.name}</p>
+                      <p className="text-[10px] text-violet-400">{(voiceover.duration).toFixed(1)}s</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { URL.revokeObjectURL(voiceover.url); setVoiceover(null); }}
-                    className="p-2 text-zinc-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  <button 
+                    onClick={() => setVoiceover(null)}
+                    className="p-2 text-violet-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 {voiceover.transcription && (
-                  <div className="mt-2 p-3 bg-zinc-50 rounded-xl text-[11px] text-zinc-600 leading-relaxed max-h-32 overflow-y-auto border border-zinc-100">
-                    <span className="font-bold text-zinc-400 uppercase text-[9px] block mb-1">Transcription</span>
+                  <div className="mt-2 p-3 bg-violet-950/50 rounded-xl text-[11px] text-violet-300 leading-relaxed max-h-32 overflow-y-auto border border-violet-700/30">
+                    <span className="font-bold text-violet-400 uppercase text-[9px] block mb-1">Transcription</span>
                     {voiceover.transcription}
                   </div>
                 )}
@@ -330,10 +330,10 @@ export default function App() {
 
           <section className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-2">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-violet-400 flex items-center gap-2">
                 <Video className="w-4 h-4" /> Video Clips
               </h2>
-              <span className="text-[10px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold bg-violet-800/50 text-violet-300 px-2 py-0.5 rounded-full border border-violet-600/50">
                 {videoClips.length}
               </span>
             </div>
@@ -355,32 +355,32 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     className={cn(
-                      "bg-white border rounded-2xl p-3 shadow-sm group transition-all",
-                      activeVideoId === clip.id ? "border-emerald-500 ring-1 ring-emerald-500/20" : "hover:border-zinc-300"
+                      "bg-violet-900/30 border border-violet-700/50 rounded-2xl p-3 shadow-sm group transition-all",
+                      activeVideoId === clip.id ? "border-violet-400 ring-1 ring-violet-400/30" : "hover:border-violet-600"
                     )}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-zinc-100 rounded-lg overflow-hidden relative">
+                        <div className="w-12 h-12 bg-violet-950 rounded-lg overflow-hidden relative">
                           <video src={clip.url} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <Play className="w-4 h-4 text-white fill-white" />
                           </div>
                         </div>
                         <div className="overflow-hidden">
-                          <p className="text-xs font-medium truncate w-32">{clip.name}</p>
-                          <p className="text-[10px] text-zinc-400">{clip.duration.toFixed(1)}s</p>
+                          <p className="text-xs font-medium truncate w-32 text-violet-100">{clip.name}</p>
+                          <p className="text-[10px] text-violet-400">{clip.duration.toFixed(1)}s</p>
                         </div>
                       </div>
                       <button
                         onClick={() => removeVideo(clip.id)}
-                        className="p-2 text-zinc-300 hover:text-red-500 transition-colors"
+                        className="p-2 text-violet-400 hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                     {clip.analysis && (
-                      <div className="mt-2 text-[10px] text-zinc-500 italic bg-zinc-50 p-2 rounded-lg border border-zinc-100">
+                      <div className="mt-2 text-[10px] text-violet-400 italic bg-violet-950/50 p-2 rounded-lg border border-violet-700/30">
                         {clip.analysis}
                       </div>
                     )}
@@ -394,7 +394,7 @@ export default function App() {
         {/* Main Content: Preview, Timeline, Post-Processing */}
         <div className="col-span-9 space-y-6">
           {/* Preview Area */}
-          <section className="aspect-video bg-zinc-900 rounded-3xl overflow-hidden relative shadow-2xl border border-white/10">
+          <section className="aspect-video bg-black rounded-3xl overflow-hidden relative shadow-2xl border border-violet-800/40">
             <div className="absolute inset-0 flex items-center justify-center">
               {activeVideoId ? (
                 videoClips.map((clip) => (
@@ -412,10 +412,10 @@ export default function App() {
                 ))
               ) : (
                 <div className="text-center space-y-4">
-                  <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center mx-auto">
-                    <Video className="w-8 h-8 text-zinc-600" />
+                  <div className="w-20 h-20 bg-violet-800/50 rounded-full flex items-center justify-center mx-auto border border-violet-600/30">
+                    <Video className="w-8 h-8 text-violet-500" />
                   </div>
-                  <p className="text-zinc-500 text-sm font-medium">No active clip at this time</p>
+                  <p className="text-violet-400 text-sm font-medium">No active clip at this time</p>
                 </div>
               )}
             </div>
@@ -431,8 +431,8 @@ export default function App() {
 
             {/* Overlay Info */}
             <div className="absolute top-6 left-6 flex items-center gap-3">
-              <div className="px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <div className="px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-violet-500/30 text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <div className="w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
                 Live Preview
               </div>
               {captionsEnabled && (
@@ -454,28 +454,35 @@ export default function App() {
             onTimeUpdate={setCurrentTime}
           />
 
-          {/* Workflow Steps */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { step: '1', icon: Layers, color: 'blue', title: 'Upload Assets', desc: 'Add your voiceover track and the video clips you want to sync.' },
-              { step: '2', icon: Sparkles, color: 'emerald', title: 'AI Analysis', desc: 'Click "Auto-Align" to let Gemini analyze content and suggest timing.' },
-              { step: '3', icon: Info, color: 'zinc', title: 'Fine Tune', desc: 'Drag clips on the timeline to perfect the timing and sequence.' },
-            ].map(({ step, icon: Icon, color, title, desc }) => (
-              <div key={step} className="bg-white border rounded-2xl p-4 flex gap-3">
-                <div className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                  color === 'blue' ? 'bg-blue-50 text-blue-600' :
-                  color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                  'bg-zinc-50 text-zinc-600'
-                )}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold mb-0.5">{step}. {title}</h3>
-                  <p className="text-[11px] text-zinc-500 leading-relaxed">{desc}</p>
-                </div>
+          {/* Instructions / Help */}
+          <div className="grid grid-cols-3 gap-6">
+            <div className="bg-violet-900/30 border border-violet-700/50 rounded-2xl p-6 flex gap-4">
+              <div className="w-10 h-10 bg-violet-500/30 text-violet-300 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Layers className="w-5 h-5" />
               </div>
-            ))}
+              <div>
+                <h3 className="text-sm font-bold mb-1 text-violet-100">1. Upload Assets</h3>
+                <p className="text-xs text-violet-400 leading-relaxed">Add your voiceover track and the video clips you want to sync.</p>
+              </div>
+            </div>
+            <div className="bg-violet-900/30 border border-violet-700/50 rounded-2xl p-6 flex gap-4">
+              <div className="w-10 h-10 bg-violet-500/30 text-violet-300 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold mb-1 text-violet-100">2. AI Analysis</h3>
+                <p className="text-xs text-violet-400 leading-relaxed">Click "Auto-Align" to let Gemini analyze content and suggest timing.</p>
+              </div>
+            </div>
+            <div className="bg-violet-900/30 border border-violet-700/50 rounded-2xl p-6 flex gap-4">
+              <div className="w-10 h-10 bg-violet-500/30 text-violet-300 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Info className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold mb-1 text-violet-100">3. Fine Tune</h3>
+                <p className="text-xs text-violet-400 leading-relaxed">Drag clips on the timeline to perfect the timing and sequence.</p>
+              </div>
+            </div>
           </div>
 
           {/* Post-Processing Panel */}
