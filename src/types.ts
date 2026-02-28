@@ -25,3 +25,32 @@ export interface AlignmentResult {
   startTime: number;
   reason: string;
 }
+
+export interface Chapter {
+  time: number;
+  label: string;
+}
+
+export interface VideoDescription {
+  summary: string;
+  chapters: Chapter[];
+  hashtags: string[];
+}
+
+export type CaptionMode = 'lower-third' | 'word-highlight' | 'speaker-labeled';
+
+export interface CaptionStyle {
+  mode: CaptionMode;
+  fontSize: number;
+  color: string;
+  bgColor: string;
+  position: 'bottom' | 'top';
+}
+
+export interface ThumbnailCandidate {
+  id: string;
+  timestamp: number;
+  quote: string;
+  reason: string;
+  imageDataUrl: string;
+}

@@ -1,18 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { VideoClip, Voiceover } from './types';
+import { VideoClip, Voiceover, CaptionStyle } from './types';
 import { FileUploader } from './components/FileUploader';
 import { Timeline } from './components/Timeline';
+import { PostProcessingPanel } from './components/PostProcessingPanel';
 import { analyzeVoiceover, analyzeVideo, suggestAlignment } from './services/gemini';
-import { 
-  Video, 
-  Music, 
-  Trash2, 
-  ChevronRight, 
-  Sparkles, 
+import {
+  Video,
+  Music,
+  Trash2,
+  Sparkles,
   Layers,
   Info,
   Play,
-  Pause,
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -35,6 +34,83 @@ function chainClips(clips: VideoClip[]): VideoClip[] {
   });
 }
 
+// Caption overlay displayed over the preview video
+function CaptionOverlay({
+  segments,
+  currentTime,
+  style,
+}: {
+  segments: Array<{ text: string; start: number; end: number }>;
+  currentTime: number;
+  style: CaptionStyle;
+}) {
+  const seg = segments.find(s => currentTime >= s.start && currentTime <= s.end);
+  if (!seg) return null;
+
+  const baseContainer = cn(
+    'absolute left-0 right-0 px-6 pointer-events-none z-10 flex justify-center',
+    style.position === 'bottom' ? 'bottom-6' : 'top-6'
+  );
+
+  if (style.mode === 'word-highlight') {
+    const words = seg.text.split(' ');
+    const wordDur = (seg.end - seg.start) / Math.max(words.length, 1);
+    const wordIdx = Math.floor((currentTime - seg.start) / wordDur);
+    return (
+      <div className={baseContainer}>
+        <div
+          className="px-4 py-2 rounded-xl flex flex-wrap gap-x-1.5 gap-y-1 justify-center max-w-2xl"
+          style={{ backgroundColor: style.bgColor, fontSize: `${style.fontSize}px` }}
+        >
+          {words.map((w, i) => (
+            <span
+              key={i}
+              style={{
+                color: i === wordIdx ? '#34d399' : style.color,
+                fontWeight: i === wordIdx ? 700 : 500,
+                transition: 'color 0.1s',
+              }}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (style.mode === 'speaker-labeled') {
+    return (
+      <div className={baseContainer}>
+        <div
+          className="px-4 py-2 rounded-xl max-w-2xl"
+          style={{ backgroundColor: style.bgColor, fontSize: `${style.fontSize}px` }}
+        >
+          <span style={{ color: '#34d399', fontWeight: 700, marginRight: '8px' }}>Speaker:</span>
+          <span style={{ color: style.color }}>{seg.text}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: lower-third
+  return (
+    <div className={baseContainer}>
+      <div
+        className="px-5 py-2.5 rounded-xl max-w-2xl text-center"
+        style={{
+          backgroundColor: style.bgColor,
+          color: style.color,
+          fontSize: `${style.fontSize}px`,
+          fontWeight: 600,
+        }}
+      >
+        {seg.text}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
   const [voiceover, setVoiceover] = useState<Voiceover | null>(null);
@@ -43,9 +119,17 @@ export default function App() {
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
 
+  // Caption state (lifted to App so the preview overlay can read it)
+  const [captionsEnabled, setCaptionsEnabled] = useState(false);
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>({
+    mode: 'lower-third',
+    fontSize: 16,
+    color: '#ffffff',
+    bgColor: '#000000',
+    position: 'bottom',
+  });
+
   // Sync video playback with timeline time.
-  // Guarantees a clip is always visible — when currentTime falls in a gap or past
-  // the last clip, we virtually loop the clip sequence so there's never a blank screen.
   useEffect(() => {
     if (videoClips.length === 0) {
       setActiveVideoId(null);
@@ -54,7 +138,6 @@ export default function App() {
 
     const sorted = [...videoClips].sort((a, b) => a.startTime - b.startTime);
 
-    // 1. Clip that directly covers current time
     const coveringClip = sorted.find(
       clip => currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration
     );
@@ -69,12 +152,9 @@ export default function App() {
       return;
     }
 
-    // 2. No clip at this time — virtually loop the full clip sequence so the
-    //    screen is never blank (handles gaps from manual drags AND audio longer than video).
     const totalClipDuration = sorted.reduce((sum, c) => sum + c.duration, 0);
     if (totalClipDuration <= 0) return;
 
-    // Map currentTime into [0, totalClipDuration) cyclically
     const loopedTime = currentTime % totalClipDuration;
     let elapsed = 0;
     for (const clip of sorted) {
@@ -90,7 +170,6 @@ export default function App() {
       elapsed += clip.duration;
     }
 
-    // Fallback: hold on the last frame of the last clip
     const last = sorted[sorted.length - 1];
     setActiveVideoId(last.id);
     const lastVideo = videoRefs.current[last.id];
@@ -128,6 +207,7 @@ export default function App() {
       const video = document.createElement('video');
       video.src = url;
       video.onloadedmetadata = () => resolve(video.duration);
+      video.onerror = () => resolve(0);
     });
   };
 
@@ -135,19 +215,18 @@ export default function App() {
     return new Promise((resolve) => {
       const audio = new Audio(url);
       audio.onloadedmetadata = () => resolve(audio.duration);
+      audio.onerror = () => resolve(0);
     });
   };
 
   const handleAutoAlign = async () => {
     if (!voiceover || videoClips.length === 0) return;
-    
+
     setIsAligning(true);
     try {
-      // 1. Analyze voiceover
       const { transcription, segments } = await analyzeVoiceover(voiceover.file);
       setVoiceover(prev => prev ? { ...prev, transcription, segments } : null);
 
-      // 2. Analyze videos (only those without analysis)
       const updatedClips = await Promise.all(
         videoClips.map(async (clip) => {
           if (clip.analysis) return clip;
@@ -157,21 +236,16 @@ export default function App() {
       );
       setVideoClips(updatedClips);
 
-      // 3. Suggest alignment
       const alignment = await suggestAlignment(
         segments,
-        updatedClips.map(c => ({ id: c.id, name: c.name, analysis: c.analysis! }))
+        updatedClips.map(c => ({ id: c.id, name: c.name, analysis: c.analysis ?? '' }))
       );
 
-      // 4. Apply alignment
       const alignedClips = updatedClips.map(clip => {
         const match = alignment.find(a => a.videoId === clip.id);
         return match ? { ...clip, startTime: match.startTime } : clip;
       });
 
-      // 5. Chain clips back-to-back (preserving AI order, closing all gaps).
-      //    The preview's virtual-looping handles any remaining time beyond the last clip,
-      //    so there is never a blank screen regardless of audio/video length mismatch.
       setVideoClips(chainClips(alignedClips));
     } catch (error) {
       console.error("Alignment failed:", error);
@@ -182,6 +256,8 @@ export default function App() {
   };
 
   const removeVideo = (id: string) => {
+    const clip = videoClips.find(c => c.id === id);
+    if (clip) URL.revokeObjectURL(clip.url);
     setVideoClips(videoClips.filter(c => c.id !== id));
   };
 
@@ -235,8 +311,8 @@ export default function App() {
                       <p className="text-[10px] text-zinc-400">{(voiceover.duration).toFixed(1)}s</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setVoiceover(null)}
+                  <button
+                    onClick={() => { URL.revokeObjectURL(voiceover.url); setVoiceover(null); }}
                     className="p-2 text-zinc-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -261,7 +337,7 @@ export default function App() {
                 {videoClips.length}
               </span>
             </div>
-            
+
             <FileUploader
               label="Add Videos"
               accept={{ 'video/*': ['.mp4', '.mov', '.webm'] }}
@@ -296,7 +372,7 @@ export default function App() {
                           <p className="text-[10px] text-zinc-400">{clip.duration.toFixed(1)}s</p>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => removeVideo(clip.id)}
                         className="p-2 text-zinc-300 hover:text-red-500 transition-colors"
                       >
@@ -315,8 +391,8 @@ export default function App() {
           </section>
         </div>
 
-        {/* Main Content: Preview & Timeline */}
-        <div className="col-span-9 space-y-8">
+        {/* Main Content: Preview, Timeline, Post-Processing */}
+        <div className="col-span-9 space-y-6">
           {/* Preview Area */}
           <section className="aspect-video bg-zinc-900 rounded-3xl overflow-hidden relative shadow-2xl border border-white/10">
             <div className="absolute inset-0 flex items-center justify-center">
@@ -343,13 +419,27 @@ export default function App() {
                 </div>
               )}
             </div>
-            
+
+            {/* Caption overlay */}
+            {captionsEnabled && voiceover?.segments && voiceover.segments.length > 0 && (
+              <CaptionOverlay
+                segments={voiceover.segments}
+                currentTime={currentTime}
+                style={captionStyle}
+              />
+            )}
+
             {/* Overlay Info */}
             <div className="absolute top-6 left-6 flex items-center gap-3">
               <div className="px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                 Live Preview
               </div>
+              {captionsEnabled && (
+                <div className="px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-white uppercase tracking-wider">
+                  CC On
+                </div>
+              )}
             </div>
           </section>
 
@@ -364,36 +454,40 @@ export default function App() {
             onTimeUpdate={setCurrentTime}
           />
 
-          {/* Instructions / Help */}
-          <div className="grid grid-cols-3 gap-6">
-            <div className="bg-white border rounded-2xl p-6 flex gap-4">
-              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Layers className="w-5 h-5" />
+          {/* Workflow Steps */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { step: '1', icon: Layers, color: 'blue', title: 'Upload Assets', desc: 'Add your voiceover track and the video clips you want to sync.' },
+              { step: '2', icon: Sparkles, color: 'emerald', title: 'AI Analysis', desc: 'Click "Auto-Align" to let Gemini analyze content and suggest timing.' },
+              { step: '3', icon: Info, color: 'zinc', title: 'Fine Tune', desc: 'Drag clips on the timeline to perfect the timing and sequence.' },
+            ].map(({ step, icon: Icon, color, title, desc }) => (
+              <div key={step} className="bg-white border rounded-2xl p-4 flex gap-3">
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                  color === 'blue' ? 'bg-blue-50 text-blue-600' :
+                  color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
+                  'bg-zinc-50 text-zinc-600'
+                )}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold mb-0.5">{step}. {title}</h3>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed">{desc}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold mb-1">1. Upload Assets</h3>
-                <p className="text-xs text-zinc-500 leading-relaxed">Add your voiceover track and the video clips you want to sync.</p>
-              </div>
-            </div>
-            <div className="bg-white border rounded-2xl p-6 flex gap-4">
-              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold mb-1">2. AI Analysis</h3>
-                <p className="text-xs text-zinc-500 leading-relaxed">Click "Auto-Align" to let Gemini analyze content and suggest timing.</p>
-              </div>
-            </div>
-            <div className="bg-white border rounded-2xl p-6 flex gap-4">
-              <div className="w-10 h-10 bg-zinc-50 text-zinc-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Info className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold mb-1">3. Fine Tune</h3>
-                <p className="text-xs text-zinc-500 leading-relaxed">Drag clips on the timeline to perfect the timing and sequence.</p>
-              </div>
-            </div>
+            ))}
           </div>
+
+          {/* Post-Processing Panel */}
+          <PostProcessingPanel
+            voiceover={voiceover}
+            videoClips={videoClips}
+            currentTime={currentTime}
+            captionStyle={captionStyle}
+            captionsEnabled={captionsEnabled}
+            onCaptionStyleChange={setCaptionStyle}
+            onCaptionsEnabledChange={setCaptionsEnabled}
+          />
         </div>
       </main>
     </div>
