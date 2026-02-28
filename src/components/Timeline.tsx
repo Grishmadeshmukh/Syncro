@@ -1,0 +1,183 @@
+import React, { useEffect, useRef, useState } from 'react';
+import WaveSurfer from 'wavesurfer.js';
+import { VideoClip, Voiceover } from '../types';
+import { motion } from 'motion/react';
+import { Play, Pause, Scissors, Trash2, Wand2, Video } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+interface TimelineProps {
+  voiceover: Voiceover | null;
+  videoClips: VideoClip[];
+  onVideoClipChange: (clips: VideoClip[]) => void;
+  onAutoAlign: () => void;
+  isAligning: boolean;
+  currentTime: number;
+  onTimeUpdate: (time: number) => void;
+}
+
+export const Timeline: React.FC<TimelineProps> = ({
+  voiceover,
+  videoClips,
+  onVideoClipChange,
+  onAutoAlign,
+  isAligning,
+  currentTime,
+  onTimeUpdate,
+}) => {
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurfer = useRef<WaveSurfer | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    if (waveformRef.current && voiceover) {
+      wavesurfer.current = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: '#10b981',
+        progressColor: '#059669',
+        cursorColor: '#141414',
+        barWidth: 2,
+        barRadius: 3,
+        height: 80,
+        url: voiceover.url,
+      });
+
+      wavesurfer.current.on('timeupdate', (time) => {
+        onTimeUpdate(time);
+      });
+
+      wavesurfer.current.on('play', () => setIsPlaying(true));
+      wavesurfer.current.on('pause', () => setIsPlaying(false));
+
+      return () => {
+        wavesurfer.current?.destroy();
+      };
+    }
+  }, [voiceover]);
+
+  const togglePlay = () => {
+    wavesurfer.current?.playPause();
+  };
+
+  const handleClipDrag = (id: string, newStartTime: number) => {
+    const updatedClips = videoClips.map((clip) =>
+      clip.id === id ? { ...clip, startTime: Math.max(0, newStartTime) } : clip
+    );
+    onVideoClipChange(updatedClips);
+  };
+
+  const totalDuration = Math.max(
+    voiceover?.duration || 0,
+    ...videoClips.map((c) => c.startTime + c.duration)
+  );
+
+  const pixelsPerSecond = 50;
+
+  return (
+    <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b flex items-center justify-between bg-zinc-50/50">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={togglePlay}
+            className="p-2 rounded-full bg-zinc-900 text-white hover:bg-zinc-800 transition-colors"
+          >
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <div className="text-sm font-mono text-zinc-500">
+            {currentTime.toFixed(2)}s / {totalDuration.toFixed(2)}s
+          </div>
+        </div>
+        <button
+          onClick={onAutoAlign}
+          disabled={isAligning || !voiceover || videoClips.length === 0}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all",
+            "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed",
+            isAligning && "animate-pulse"
+          )}
+        >
+          <Wand2 className="w-4 h-4" />
+          {isAligning ? "Analyzing..." : "Auto-Align with AI"}
+        </button>
+      </div>
+
+      <div className="relative overflow-x-auto p-8 min-h-[300px] bg-zinc-50/30">
+        {/* Time Markers */}
+        <div className="absolute top-0 left-8 right-8 h-6 border-b flex items-end">
+          {Array.from({ length: Math.ceil(totalDuration) + 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute border-l border-zinc-200 h-2"
+              style={{ left: `${i * pixelsPerSecond}px` }}
+            >
+              <span className="absolute -top-5 left-1 text-[10px] text-zinc-400 font-mono">
+                {i}s
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Playhead */}
+        <div
+          className="absolute top-0 bottom-0 w-px bg-red-500 z-50 pointer-events-none"
+          style={{ left: `${8 + currentTime * pixelsPerSecond}px` }}
+        >
+          <div className="absolute top-0 -left-1.5 w-3 h-3 bg-red-500 rounded-full" />
+        </div>
+
+        <div className="relative mt-8 space-y-4" style={{ width: `${(totalDuration + 5) * pixelsPerSecond}px` }}>
+          {/* Audio Track */}
+          <div className="relative h-20 bg-emerald-50/50 rounded-xl border border-emerald-100 overflow-hidden">
+            <div className="absolute inset-0 opacity-50" ref={waveformRef} />
+            <div className="absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold text-emerald-600">
+              Voiceover Track
+            </div>
+          </div>
+
+          {/* Video Tracks */}
+          <div className="space-y-2">
+            {videoClips.map((clip, index) => (
+              <div key={clip.id} className="relative h-16 group">
+                <motion.div
+                  drag="x"
+                  dragMomentum={false}
+                  onDrag={(_, info) => {
+                    const newTime = clip.startTime + info.delta.x / pixelsPerSecond;
+                    handleClipDrag(clip.id, newTime);
+                  }}
+                  className={cn(
+                    "absolute h-full rounded-xl border flex flex-col justify-center px-4 cursor-grab active:cursor-grabbing transition-shadow",
+                    "bg-white border-zinc-200 shadow-sm hover:shadow-md",
+                    currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration
+                      ? "border-emerald-500 ring-2 ring-emerald-500/20"
+                      : "border-zinc-200"
+                  )}
+                  style={{
+                    left: `${clip.startTime * pixelsPerSecond}px`,
+                    width: `${clip.duration * pixelsPerSecond}px`,
+                  }}
+                >
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <Video className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                    <span className="text-xs font-medium text-zinc-700 truncate">
+                      {clip.name}
+                    </span>
+                  </div>
+                  {clip.analysis && (
+                    <div className="text-[10px] text-zinc-400 truncate mt-1 italic">
+                      {clip.analysis}
+                    </div>
+                  )}
+                </motion.div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
