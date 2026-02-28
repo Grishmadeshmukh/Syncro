@@ -3,6 +3,7 @@ import { VideoClip, Voiceover } from './types';
 import { FileUploader } from './components/FileUploader';
 import { Timeline } from './components/Timeline';
 import { analyzeVoiceover, analyzeVideo, suggestAlignment } from './services/gemini';
+import { recordTimelineToWebM, webmToMp4 } from './services/videoExport';
 import { 
   Video, 
   Music, 
@@ -28,6 +29,8 @@ export default function App() {
   const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
   const [voiceover, setVoiceover] = useState<Voiceover | null>(null);
   const [isAligning, setIsAligning] = useState(false);
+  const [isExportingVideo, setIsExportingVideo] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ current: number; total: number } | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
@@ -136,7 +139,7 @@ export default function App() {
     setVideoClips(videoClips.filter(c => c.id !== id));
   };
 
-  const handleDownload = () => {
+  const handleDownloadJson = () => {
     const totalDuration = Math.max(
       voiceover?.duration || 0,
       ...videoClips.map((c) => c.startTime + c.duration)
@@ -174,6 +177,38 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadVideo = async () => {
+    if (videoClips.length === 0) return;
+    setIsExportingVideo(true);
+    setExportProgress({ current: 0, total: 1 });
+    try {
+      const totalDuration = Math.max(
+        voiceover?.duration || 0,
+        ...videoClips.map((c) => c.startTime + c.duration),
+        1
+      );
+      const webmBlob = await recordTimelineToWebM(
+        videoClips,
+        voiceover,
+        (current, total) => setExportProgress({ current, total })
+      );
+      setExportProgress(null);
+      const mp4Blob = await webmToMp4(webmBlob);
+      const url = URL.createObjectURL(mp4Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `syncvoice-video-${new Date().toISOString().slice(0, 10)}.mp4`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Video export failed:', error);
+      alert('Failed to export video. Please try again.');
+    } finally {
+      setIsExportingVideo(false);
+      setExportProgress(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 font-sans">
       {/* Header */}
@@ -192,17 +227,40 @@ export default function App() {
             <Clock className="w-3.5 h-3.5" />
             {currentTime.toFixed(2)}s
           </div>
-          <button
-            onClick={handleDownload}
-            disabled={videoClips.length === 0}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all",
-              "bg-zinc-900 text-white hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            )}
-          >
-            <Download className="w-4 h-4" />
-            Download
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadJson}
+              disabled={videoClips.length === 0}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all",
+                "bg-zinc-200 text-zinc-800 hover:bg-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              <Download className="w-4 h-4" />
+              JSON
+            </button>
+            <button
+              onClick={handleDownloadVideo}
+              disabled={videoClips.length === 0 || isExportingVideo}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all min-w-[140px]",
+                "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed",
+                isExportingVideo && "animate-pulse"
+              )}
+            >
+              {isExportingVideo ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {exportProgress ? `${Math.round((exportProgress.current / exportProgress.total) * 100)}%` : '…'}
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  MP4
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
