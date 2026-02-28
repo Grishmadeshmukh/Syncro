@@ -2,13 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { VideoClip, Voiceover, WorkflowMode } from './types';
 import { FileUploader } from './components/FileUploader';
 import { Timeline } from './components/Timeline';
+import { ClipEditor } from './components/ClipEditor';
+import { VoiceoverEditor } from './components/VoiceoverEditor';
 import { analyzeVoiceover, analyzeVideo, suggestAlignment, generateAudioFromScript, generateNarrationFromVideos } from './services/gemini';
-import { 
-  Video, 
-  Music, 
-  Trash2, 
-  ChevronRight, 
-  Sparkles, 
+import {
+  Video,
+  Music,
+  Trash2,
+  ChevronRight,
+  Sparkles,
   Layers,
   Info,
   Play,
@@ -17,7 +19,8 @@ import {
   FileText,
   Mic2,
   Wand2,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -37,6 +40,8 @@ export default function App() {
   const [script, setScript] = useState('');
   const [selectedVoice, setSelectedVoice] = useState('Aoede');
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [editingClipId, setEditingClipId] = useState<string | null>(null);
+  const [showVoiceoverEditor, setShowVoiceoverEditor] = useState(false);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
 
   const VOICES = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck'];
@@ -60,7 +65,8 @@ export default function App() {
       setActiveVideoId(activeClip.id);
       const video = videoRefs.current[activeClip.id];
       if (video) {
-        const relativeTime = currentTime - activeClip.startTime;
+        // Offset by trimStart so the video starts at the trimmed point
+        const relativeTime = (currentTime - activeClip.startTime) + (activeClip.trimStart ?? 0);
         if (Math.abs(video.currentTime - relativeTime) > 0.1) {
           video.currentTime = relativeTime;
         }
@@ -154,7 +160,7 @@ export default function App() {
 
   const handleAutoAlign = async () => {
     if (!voiceover || videoClips.length === 0) return;
-    
+
     setIsAligning(true);
     try {
       // 1. Build segments — keep in a local var so we don't read stale state later
@@ -210,6 +216,12 @@ export default function App() {
     setVideoClips(videoClips.filter(c => c.id !== id));
   };
 
+  const handleClipEdit = (updated: VideoClip) => {
+    setVideoClips(prev => prev.map(c => c.id === updated.id ? updated : c));
+  };
+
+  const editingClip = videoClips.find(c => c.id === editingClipId) ?? null;
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-zinc-900 font-sans">
       {/* Header */}
@@ -247,7 +259,7 @@ export default function App() {
               mode === m.id
                 ? m.color === 'emerald' ? "bg-emerald-600 text-white shadow shadow-emerald-200"
                   : m.color === 'blue' ? "bg-blue-600 text-white shadow shadow-blue-200"
-                  : "bg-violet-600 text-white shadow shadow-violet-200"
+                    : "bg-violet-600 text-white shadow shadow-violet-200"
                 : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
             )}
           >
@@ -278,7 +290,13 @@ export default function App() {
                   icon={<Music className="w-6 h-6" />}
                 />
               ) : (
-                <VoiceoverCard voiceover={voiceover} onRemove={() => setVoiceover(null)} />
+                <VoiceoverCard
+                  voiceover={voiceover}
+                  onRemove={() => setVoiceover(null)}
+                  onEdit={() => setShowVoiceoverEditor(v => !v)}
+                  onUpdate={v => setVoiceover(v)}
+                  showEditor={showVoiceoverEditor}
+                />
               )
             )}
 
@@ -311,7 +329,13 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <VoiceoverCard voiceover={voiceover} onRemove={() => setVoiceover(null)} />
+                <VoiceoverCard
+                  voiceover={voiceover}
+                  onRemove={() => setVoiceover(null)}
+                  onEdit={() => setShowVoiceoverEditor(v => !v)}
+                  onUpdate={v => setVoiceover(v)}
+                  showEditor={showVoiceoverEditor}
+                />
               )
             )}
 
@@ -342,7 +366,13 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <VoiceoverCard voiceover={voiceover} onRemove={() => setVoiceover(null)} />
+                <VoiceoverCard
+                  voiceover={voiceover}
+                  onRemove={() => setVoiceover(null)}
+                  onEdit={() => setShowVoiceoverEditor(v => !v)}
+                  onUpdate={v => setVoiceover(v)}
+                  showEditor={showVoiceoverEditor}
+                />
               )
             )}
           </section>
@@ -356,7 +386,7 @@ export default function App() {
                 {videoClips.length}
               </span>
             </div>
-            
+
             <FileUploader
               label="Add Videos"
               accept={{ 'video/*': ['.mp4', '.mov', '.webm'] }}
@@ -388,19 +418,38 @@ export default function App() {
                         </div>
                         <div className="overflow-hidden">
                           <p className="text-xs font-medium truncate w-32">{clip.name}</p>
-                          <p className="text-[10px] text-zinc-400">{clip.duration.toFixed(1)}s</p>
+                          <p className="text-[10px] text-zinc-400">
+                            {clip.trimStart !== undefined || clip.trimmedDuration !== undefined
+                              ? `${(clip.trimmedDuration ?? (clip.duration - (clip.trimStart ?? 0))).toFixed(1)}s trimmed`
+                              : `${clip.duration.toFixed(1)}s`
+                            }
+                          </p>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => removeVideo(clip.id)}
-                        className="p-2 text-zinc-300 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setEditingClipId(clip.id)}
+                          className="p-2 text-zinc-300 hover:text-emerald-600 transition-colors"
+                          title="Edit clip"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => removeVideo(clip.id)}
+                          className="p-2 text-zinc-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     {clip.analysis && (
-                      <div className="mt-2 text-[10px] text-zinc-500 italic bg-zinc-50 p-2 rounded-lg border border-zinc-100">
-                        {clip.analysis}
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 10" fill="none">
+                            <path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        <span className="text-[10px] font-semibold text-emerald-600">Processed</span>
                       </div>
                     )}
                   </motion.div>
@@ -438,7 +487,19 @@ export default function App() {
                 </div>
               )}
             </div>
-            
+
+            {/* Text overlay caption for the active clip */}
+            {activeVideoId && (() => {
+              const activeClip = videoClips.find(c => c.id === activeVideoId);
+              return activeClip?.textOverlay ? (
+                <div className="absolute bottom-6 left-0 right-0 flex justify-center px-8 pointer-events-none">
+                  <span className="bg-black/60 backdrop-blur-sm text-white text-sm font-semibold px-5 py-2 rounded-xl max-w-lg text-center">
+                    {activeClip.textOverlay}
+                  </span>
+                </div>
+              ) : null;
+            })()}
+
             {/* Overlay Info */}
             <div className="absolute top-6 left-6 flex items-center gap-3">
               <div className="px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-full border border-white/10 text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -451,6 +512,7 @@ export default function App() {
           {/* Timeline Area */}
           <Timeline
             voiceover={voiceover}
+            onVoiceoverChange={setVoiceover}
             videoClips={videoClips}
             onVideoClipChange={setVideoClips}
             onAutoAlign={handleAutoAlign}
@@ -491,34 +553,78 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* ClipEditor modal — rendered inside the root div so it can use fixed positioning */}
+      {editingClipId && editingClip && (
+        <ClipEditor
+          clip={editingClip}
+          onSave={handleClipEdit}
+          onClose={() => setEditingClipId(null)}
+        />
+      )}
     </div>
   );
 }
-function VoiceoverCard({ voiceover, onRemove }: { voiceover: Voiceover; onRemove: () => void }) {
+function VoiceoverCard({
+  voiceover,
+  onRemove,
+  onEdit,
+  onUpdate,
+  showEditor,
+}: {
+  voiceover: Voiceover;
+  onRemove: () => void;
+  onEdit: () => void;
+  onUpdate: (updated: Voiceover) => void;
+  showEditor: boolean;
+}) {
   return (
-    <div className="bg-white border rounded-2xl p-4 shadow-sm group">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
-            <Music className="w-4 h-4" />
+    <div className="space-y-2">
+      <div className="bg-white border rounded-2xl p-4 shadow-sm group">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
+              <Music className="w-4 h-4" />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-sm font-medium truncate w-32">{voiceover.file?.name ?? 'AI Generated'}</p>
+              <p className="text-[10px] text-zinc-400">
+                {voiceover.trimStart !== undefined || voiceover.trimEnd !== undefined
+                  ? `${((voiceover.trimEnd ?? voiceover.duration) - (voiceover.trimStart ?? 0)).toFixed(1)}s trimmed`
+                  : `${voiceover.duration.toFixed(1)}s`
+                }
+              </p>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <p className="text-sm font-medium truncate w-32">{voiceover.file?.name ?? 'AI Generated'}</p>
-            <p className="text-[10px] text-zinc-400">{voiceover.duration.toFixed(1)}s</p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onEdit}
+              className="p-2 text-zinc-300 hover:text-emerald-600 transition-colors opacity-0 group-hover:opacity-100"
+              title="Trim voiceover"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onRemove}
+              className="p-2 text-zinc-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
-        <button
-          onClick={onRemove}
-          className="p-2 text-zinc-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {voiceover.transcription && (
+          <div className="mt-2 p-3 bg-zinc-50 rounded-xl text-[11px] text-zinc-600 leading-relaxed max-h-32 overflow-y-auto border border-zinc-100">
+            <span className="font-bold text-zinc-400 uppercase text-[9px] block mb-1">Transcription</span>
+            {voiceover.transcription}
+          </div>
+        )}
       </div>
-      {voiceover.transcription && (
-        <div className="mt-2 p-3 bg-zinc-50 rounded-xl text-[11px] text-zinc-600 leading-relaxed max-h-32 overflow-y-auto border border-zinc-100">
-          <span className="font-bold text-zinc-400 uppercase text-[9px] block mb-1">Transcription</span>
-          {voiceover.transcription}
-        </div>
+      {showEditor && (
+        <VoiceoverEditor
+          voiceover={voiceover}
+          onSave={onUpdate}
+          onClose={() => onEdit()}
+        />
       )}
     </div>
   );

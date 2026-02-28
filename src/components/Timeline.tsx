@@ -13,6 +13,7 @@ interface TimelineProps {
   voiceover: Voiceover | null;
   videoClips: VideoClip[];
   onVideoClipChange: (clips: VideoClip[]) => void;
+  onVoiceoverChange?: (voiceover: Voiceover) => void;
   onAutoAlign: () => void;
   isAligning: boolean;
   currentTime: number;
@@ -26,6 +27,18 @@ interface ClipDragState {
   startClipTime: number;
 }
 
+type TrimSide = 'left' | 'right';
+interface TrimDragState {
+  id: string;
+  side: TrimSide;
+  startMouseX: number;
+  // snapshot values at drag start
+  origTrimStart: number;
+  origTrimmedDuration: number;
+  origDuration: number;
+  origStartTime: number;
+}
+
 export const Timeline: React.FC<TimelineProps> = ({
   voiceover,
   videoClips,
@@ -34,6 +47,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   isAligning,
   currentTime,
   onTimeUpdate,
+  onVoiceoverChange,
 }) => {
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurfer = useRef<WaveSurfer | null>(null);
@@ -41,10 +55,18 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
+  const [draggingTrimId, setDraggingTrimId] = useState<string | null>(null);
   const clipDragRef = useRef<ClipDragState | null>(null);
+  const trimDragRef = useRef<TrimDragState | null>(null);
+  const voiceoverDragRef = useRef<{ startMouseX: number; startClipTime: number } | null>(null);
   const videoClipsRef = useRef(videoClips);
-  // Suppress WaveSurfer timeupdate while user is actively scrubbing
-  const isScrubbing = useRef(false);
+  const voiceoverRef = useRef(voiceover);
+  const [isDraggingVoiceover, setIsDraggingVoiceover] = useState(false);
+  const currentTimeRef = useRef(currentTime);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
 
   const pixelsPerSecond = 50;
   const TRACK_PADDING = 32; // px (p-8 = 2rem = 32px)
@@ -54,21 +76,38 @@ export const Timeline: React.FC<TimelineProps> = ({
     videoClipsRef.current = videoClips;
   }, [videoClips]);
 
+  useEffect(() => {
+    voiceoverRef.current = voiceover;
+  }, [voiceover]);
+
+  // Effective voiceover duration respects trimStart/trimEnd
+  const voiceoverEffectiveDuration = voiceover
+    ? (voiceover.trimEnd ?? voiceover.duration) - (voiceover.trimStart ?? 0)
+    : 0;
+
   const totalDuration = Math.max(
-    voiceover?.duration || 0,
+    (voiceover?.startTime ?? 0) + voiceoverEffectiveDuration,
     ...videoClips.map((c) => c.startTime + (c.trimmedDuration ?? c.duration)),
     10
   );
 
   const seekToTime = useCallback((time: number) => {
     const clamped = Math.max(0, Math.min(time, totalDuration));
-    isScrubbing.current = true;
     onTimeUpdate(clamped);
     if (wavesurfer.current && voiceover) {
-      wavesurfer.current.seekTo(clamped / voiceover.duration);
+      const vStartTime = voiceover.startTime ?? 0;
+      const vTrimStart = voiceover.trimStart ?? 0;
+      const vDuration = voiceover.trimEnd ? voiceover.trimEnd - vTrimStart : voiceover.duration - vTrimStart;
+      const relative = clamped - vStartTime;
+
+      if (relative < 0) {
+        wavesurfer.current.seekTo(vTrimStart / voiceover.duration);
+      } else if (relative > vDuration) {
+        wavesurfer.current.seekTo((vTrimStart + vDuration) / voiceover.duration);
+      } else {
+        wavesurfer.current.seekTo((vTrimStart + relative) / voiceover.duration);
+      }
     }
-    // Allow timeupdate to resume after the seek settles
-    setTimeout(() => { isScrubbing.current = false; }, 50);
   }, [onTimeUpdate, totalDuration, voiceover]);
 
   const getXFromMouseEvent = useCallback((e: MouseEvent | React.MouseEvent) => {
@@ -94,11 +133,14 @@ export const Timeline: React.FC<TimelineProps> = ({
         url: voiceover.url,
       });
 
-      wavesurfer.current.on('timeupdate', (time) => {
-        if (!isScrubbing.current) onTimeUpdate(time);
+      // Once audio is decoded, seek to trimStart so playback and progress
+      // both start at the correct offset within the original audio file
+      wavesurfer.current.on('ready', () => {
+        const trimStart = voiceover.trimStart ?? 0;
+        if (trimStart > 0) {
+          wavesurfer.current?.seekTo(trimStart / voiceover.duration);
+        }
       });
-      wavesurfer.current.on('play', () => setIsPlaying(true));
-      wavesurfer.current.on('pause', () => setIsPlaying(false));
 
       return () => {
         wavesurfer.current?.destroy();
@@ -106,6 +148,58 @@ export const Timeline: React.FC<TimelineProps> = ({
       };
     }
   }, [voiceover]);
+
+  // ── Universal Clock ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isPlaying) {
+      if (wavesurfer.current?.isPlaying()) {
+        wavesurfer.current.pause();
+      }
+      return;
+    }
+
+    let frameId: number;
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+      const nextTime = currentTimeRef.current + delta;
+
+      if (nextTime >= totalDuration) {
+        setIsPlaying(false);
+        onTimeUpdate(totalDuration);
+        if (wavesurfer.current?.isPlaying()) wavesurfer.current.pause();
+        return;
+      }
+
+      onTimeUpdate(nextTime);
+
+      if (wavesurfer.current && voiceover) {
+        const vStartTime = voiceover.startTime ?? 0;
+        const vTrimStart = voiceover.trimStart ?? 0;
+        const vDuration = voiceover.trimEnd ? voiceover.trimEnd - vTrimStart : voiceover.duration - vTrimStart;
+
+        const relative = nextTime - vStartTime;
+        if (relative >= 0 && relative < vDuration) {
+          if (!wavesurfer.current.isPlaying()) {
+            const pos = (vTrimStart + relative) / voiceover.duration;
+            wavesurfer.current.seekTo(pos);
+            wavesurfer.current.play().catch(() => { });
+          }
+        } else {
+          if (wavesurfer.current.isPlaying()) {
+            wavesurfer.current.pause();
+          }
+        }
+      }
+
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [isPlaying, totalDuration, onTimeUpdate, voiceover]);
 
   // ── Playhead drag ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -119,6 +213,37 @@ export const Timeline: React.FC<TimelineProps> = ({
       window.removeEventListener('mouseup', onUp);
     };
   }, [isDraggingPlayhead, seekToTime, getXFromMouseEvent, getTimeFromX]);
+
+  // ── Voiceover drag ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isDraggingVoiceover) return;
+
+    const onMove = (e: MouseEvent) => {
+      const drag = voiceoverDragRef.current;
+      const currentVo = voiceoverRef.current;
+      if (!drag || !currentVo) return;
+
+      const deltaX = e.clientX - drag.startMouseX;
+      const deltaTime = deltaX / pixelsPerSecond;
+      const newStart = Math.max(0, drag.startClipTime + deltaTime);
+
+      if (onVoiceoverChange) {
+        onVoiceoverChange({ ...currentVo, startTime: newStart });
+      }
+    };
+
+    const onUp = () => {
+      voiceoverDragRef.current = null;
+      setIsDraggingVoiceover(false);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isDraggingVoiceover, onVoiceoverChange]);
 
   // ── Clip drag ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -154,16 +279,34 @@ export const Timeline: React.FC<TimelineProps> = ({
   const resolveOverlaps = (clips: VideoClip[]): VideoClip[] => {
     const sorted = [...clips].sort((a, b) => a.startTime - b.startTime);
     return sorted.map((clip, i) => {
+      const clipEffective = clip.trimmedDuration ?? (clip.duration - (clip.trimStart ?? 0));
       const next = sorted[i + 1];
-      if (next && clip.startTime + clip.duration > next.startTime) {
+      if (next && clip.startTime + clipEffective > next.startTime) {
         const trimmed = Math.max(0, next.startTime - clip.startTime);
         return { ...clip, trimmedDuration: trimmed };
       }
-      return { ...clip, trimmedDuration: undefined };
+      // Don't clear trimmedDuration if it was set by the user via the trim handles
+      return clip;
     });
   };
 
-  const togglePlay = () => wavesurfer.current?.playPause();
+  // ── Trim handle drag ─────────────────────────────────────────────────────
+  const handleTrimHandleMouseDown = (e: React.MouseEvent, clip: VideoClip, side: TrimSide) => {
+    e.stopPropagation();
+    e.preventDefault();
+    trimDragRef.current = {
+      id: clip.id,
+      side,
+      startMouseX: e.clientX,
+      origTrimStart: clip.trimStart ?? 0,
+      origTrimmedDuration: clip.trimmedDuration ?? (clip.duration - (clip.trimStart ?? 0)),
+      origDuration: clip.duration,
+      origStartTime: clip.startTime,
+    };
+    setDraggingTrimId(clip.id);
+  };
+
+  const togglePlay = () => setIsPlaying(p => !p);
 
   const handleTrackClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-clip]')) return;
@@ -180,6 +323,68 @@ export const Timeline: React.FC<TimelineProps> = ({
     };
     setDraggingClipId(clip.id);
   };
+
+  const handleVoiceoverMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!voiceover) return;
+    voiceoverDragRef.current = {
+      startMouseX: e.clientX,
+      startClipTime: voiceover.startTime ?? 0,
+    };
+    setIsDraggingVoiceover(true);
+  };
+
+  // ── Trim drag effect ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!draggingTrimId) return;
+
+    const onMove = (e: MouseEvent) => {
+      const drag = trimDragRef.current;
+      if (!drag) return;
+      const deltaX = e.clientX - drag.startMouseX;
+      const deltaSec = deltaX / pixelsPerSecond;
+
+      const clips = videoClipsRef.current;
+      const updated = clips.map((c) => {
+        if (c.id !== drag.id) return c;
+        if (drag.side === 'right') {
+          // Right handle: shrink/grow trimmedDuration
+          const newDuration = Math.max(0.5, Math.min(
+            drag.origTrimmedDuration + deltaSec,
+            drag.origDuration - drag.origTrimStart
+          ));
+          return { ...c, trimmedDuration: newDuration };
+        } else {
+          // Left handle: push trimStart forward (clip gets shorter from the left)
+          const maxShift = drag.origTrimmedDuration - 0.5;
+          const clamped = Math.max(0, Math.min(deltaSec, maxShift));
+          const newTrimStart = drag.origTrimStart + clamped;
+          const newStartTime = Math.max(0, drag.origStartTime + clamped);
+          const newTrimmedDuration = drag.origTrimmedDuration - clamped;
+          return {
+            ...c,
+            trimStart: newTrimStart > 0 ? newTrimStart : undefined,
+            startTime: newStartTime,
+            trimmedDuration: newTrimmedDuration,
+          };
+        }
+      });
+      onVideoClipChange(updated);
+    };
+
+    const onUp = () => {
+      trimDragRef.current = null;
+      setDraggingTrimId(null);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [draggingTrimId]);
 
   const sortedClips = [...videoClips].sort((a, b) => a.startTime - b.startTime);
 
@@ -247,10 +452,36 @@ export const Timeline: React.FC<TimelineProps> = ({
           className="relative mt-8 space-y-4"
           style={{ width: `${(totalDuration + 5) * pixelsPerSecond}px` }}
         >
-          {/* Voiceover waveform track */}
-          <div className="relative h-20 bg-emerald-50/50 rounded-xl border border-emerald-100 overflow-hidden">
-            <div className="absolute inset-0 opacity-50" ref={waveformRef} />
-            <div className="absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold text-emerald-600 pointer-events-none">
+          {/* Voiceover waveform track — width = effective (trimmed) duration */}
+          <div
+            className={cn(
+              "relative h-20 bg-emerald-50/50 rounded-xl border border-emerald-100 overflow-hidden",
+              "cursor-grab active:cursor-grabbing",
+              isDraggingVoiceover && "ring-2 ring-emerald-500/20 shadow-lg opacity-90"
+            )}
+            onMouseDown={handleVoiceoverMouseDown}
+            style={{
+              width: voiceover
+                ? `${voiceoverEffectiveDuration * pixelsPerSecond}px`
+                : '100%',
+              left: voiceover ? `${(voiceover.startTime ?? 0) * pixelsPerSecond}px` : 0,
+            }}
+          >
+            {/*
+              Inner WaveSurfer container: full audio width, shifted left by trimStart
+              so only the trimmed window is visible through overflow-hidden.
+              WaveSurfer measures this div's clientWidth to size its canvas,
+              giving us exactly 1 pixel per (1/pps) second — matching the ruler.
+            */}
+            <div
+              ref={waveformRef}
+              className="absolute top-0 bottom-0 opacity-50"
+              style={{
+                width: voiceover ? `${voiceover.duration * pixelsPerSecond}px` : '100%',
+                left: voiceover ? `-${(voiceover.trimStart ?? 0) * pixelsPerSecond}px` : 0,
+              }}
+            />
+            <div className="absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold text-emerald-600 pointer-events-none z-10">
               Voiceover Track
             </div>
           </div>
@@ -265,18 +496,20 @@ export const Timeline: React.FC<TimelineProps> = ({
               const isDragging = draggingClipId === clip.id;
               const zIndex = isDragging ? 100 : sortIndex + 1;
 
+              const isTrimDragging = draggingTrimId === clip.id;
+
               return (
                 <div
                   key={clip.id}
                   data-clip="true"
                   onMouseDown={(e) => handleClipMouseDown(e, clip)}
                   className={cn(
-                    "absolute h-full rounded-xl border flex flex-col justify-center px-3 select-none",
+                    "absolute h-full rounded-xl border flex flex-col justify-center px-3 select-none group/clip",
                     "cursor-grab active:cursor-grabbing",
                     isActive
                       ? "bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md"
                       : "bg-white border-zinc-200 shadow-sm hover:shadow-md hover:border-zinc-400",
-                    isDragging && "shadow-xl ring-2 ring-blue-400/40 opacity-90"
+                    (isDragging || isTrimDragging) && "shadow-xl ring-2 ring-blue-400/40 opacity-90"
                   )}
                   style={{
                     left: `${clip.startTime * pixelsPerSecond}px`,
@@ -284,21 +517,49 @@ export const Timeline: React.FC<TimelineProps> = ({
                     zIndex,
                   }}
                 >
+                  {/* Left trim handle */}
+                  <div
+                    data-trim-handle="left"
+                    onMouseDown={(e) => handleTrimHandleMouseDown(e, clip, 'left')}
+                    className={cn(
+                      "absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center",
+                      "cursor-col-resize rounded-l-xl z-10",
+                      "opacity-0 group-hover/clip:opacity-100 transition-opacity",
+                      "bg-emerald-500/80 hover:bg-emerald-500"
+                    )}
+                  >
+                    <div className="w-0.5 h-4 bg-white/70 rounded-full" />
+                  </div>
+
                   <div className="flex items-center gap-2 overflow-hidden">
                     <Video className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
                     <span className="text-xs font-medium text-zinc-700 truncate">{clip.name}</span>
                   </div>
-                  {clip.trimmedDuration !== undefined && (
+                  {(clip.trimmedDuration !== undefined || clip.trimStart !== undefined) && (
                     <div className="flex items-center gap-1 mt-0.5">
                       <Scissors className="w-3 h-3 text-orange-400 shrink-0" />
                       <span className="text-[10px] text-orange-400 font-medium">
-                        {clip.trimmedDuration.toFixed(1)}s / {clip.duration.toFixed(1)}s
+                        {effectiveDuration.toFixed(1)}s / {clip.duration.toFixed(1)}s
                       </span>
                     </div>
                   )}
-                  {clip.analysis && clip.trimmedDuration === undefined && (
+                  {clip.analysis && clip.trimmedDuration === undefined && clip.trimStart === undefined && (
                     <div className="text-[10px] text-zinc-400 truncate mt-0.5 italic">{clip.analysis}</div>
                   )}
+
+                  {/* Right trim handle */}
+                  <div
+                    data-trim-handle="right"
+                    onMouseDown={(e) => handleTrimHandleMouseDown(e, clip, 'right')}
+                    className={cn(
+                      "absolute right-0 top-0 bottom-0 w-2.5 flex items-center justify-center",
+                      "cursor-col-resize rounded-r-xl z-10",
+                      "opacity-0 group-hover/clip:opacity-100 transition-opacity",
+                      "bg-orange-400/80 hover:bg-orange-400"
+                    )}
+                  >
+                    <div className="w-0.5 h-4 bg-white/70 rounded-full" />
+                  </div>
                 </div>
               );
             })}
