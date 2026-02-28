@@ -32,6 +32,13 @@ export const Timeline: React.FC<TimelineProps> = ({
   const waveformRef = useRef<HTMLDivElement>(null);
   const wavesurfer = useRef<WaveSurfer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingPlayheadRef = useRef(false);
+  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+  // Keep latest values accessible inside stable event listeners
+  const totalDurationRef = useRef(0);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
 
   useEffect(() => {
     if (waveformRef.current && voiceover) {
@@ -72,10 +79,59 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   const totalDuration = Math.max(
     voiceover?.duration || 0,
-    ...videoClips.map((c) => c.startTime + c.duration)
+    ...videoClips.map((c: VideoClip) => c.startTime + c.duration)
   );
+  totalDurationRef.current = totalDuration;
 
   const pixelsPerSecond = 50;
+  // Offset in px from the container's left edge where time=0 starts (matches playhead formula)
+  const timelineOffset = 8;
+
+  const getTimeFromMouseX = (clientX: number): number => {
+    const container = timelineContainerRef.current;
+    if (!container) return 0;
+    const rect = container.getBoundingClientRect();
+    const x = clientX - rect.left + container.scrollLeft - timelineOffset;
+    return Math.max(0, Math.min(x / pixelsPerSecond, totalDurationRef.current));
+  };
+
+  const seekToTime = (time: number) => {
+    onTimeUpdateRef.current(time);
+    if (wavesurfer.current) {
+      const dur = wavesurfer.current.getDuration();
+      if (dur > 0) wavesurfer.current.seekTo(time / dur);
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingPlayheadRef.current) return;
+      seekToTime(getTimeFromMouseX(e.clientX));
+    };
+    const handleMouseUp = () => {
+      if (isDraggingPlayheadRef.current) {
+        isDraggingPlayheadRef.current = false;
+        setIsDraggingPlayhead(false);
+      }
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingPlayheadRef.current = true;
+    setIsDraggingPlayhead(true);
+  };
+
+  const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Don't interfere if a clip drag is in progress
+    seekToTime(getTimeFromMouseX(e.clientX));
+  };
 
   return (
     <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
@@ -105,9 +161,18 @@ export const Timeline: React.FC<TimelineProps> = ({
         </button>
       </div>
 
-      <div className="relative overflow-x-auto p-8 min-h-[300px] bg-zinc-50/30">
-        {/* Time Markers */}
-        <div className="absolute top-0 left-8 right-8 h-6 border-b flex items-end">
+      <div
+        ref={timelineContainerRef}
+        className={cn(
+          "relative overflow-x-auto p-8 min-h-[300px] bg-zinc-50/30",
+          isDraggingPlayhead && "cursor-ew-resize select-none"
+        )}
+      >
+        {/* Time Markers — click to seek */}
+        <div
+          className="absolute top-0 left-8 right-8 h-6 border-b flex items-end cursor-pointer"
+          onClick={handleRulerClick}
+        >
           {Array.from({ length: Math.ceil(totalDuration) + 5 }).map((_, i) => (
             <div
               key={i}
@@ -123,10 +188,13 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         {/* Playhead */}
         <div
-          className="absolute top-0 bottom-0 w-px bg-red-500 z-50 pointer-events-none"
+          className="absolute top-0 bottom-0 w-px bg-red-500 z-50"
           style={{ left: `${8 + currentTime * pixelsPerSecond}px` }}
         >
-          <div className="absolute top-0 -left-1.5 w-3 h-3 bg-red-500 rounded-full" />
+          <div
+            className="absolute top-0 -left-1.5 w-3 h-3 bg-red-500 rounded-full cursor-ew-resize"
+            onMouseDown={handlePlayheadMouseDown}
+          />
         </div>
 
         <div className="relative mt-8 space-y-4" style={{ width: `${(totalDuration + 5) * pixelsPerSecond}px` }}>

@@ -23,6 +23,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Sort clips and chain them back-to-back from time 0, preserving AI-suggested order.
+function chainClips(clips: VideoClip[]): VideoClip[] {
+  if (clips.length === 0) return [];
+  const sorted = [...clips].sort((a, b) => a.startTime - b.startTime);
+  let cursor = 0;
+  return sorted.map(clip => {
+    const positioned = { ...clip, startTime: cursor };
+    cursor += clip.duration;
+    return positioned;
+  });
+}
+
 export default function App() {
   const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
   const [voiceover, setVoiceover] = useState<Voiceover | null>(null);
@@ -31,24 +43,58 @@ export default function App() {
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const videoRefs = useRef<Record<string, HTMLVideoElement>>({});
 
-  // Sync video playback with timeline time
+  // Sync video playback with timeline time.
+  // Guarantees a clip is always visible — when currentTime falls in a gap or past
+  // the last clip, we virtually loop the clip sequence so there's never a blank screen.
   useEffect(() => {
-    const activeClip = videoClips.find(
-      clip => currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration
-    );
-    
-    if (activeClip) {
-      setActiveVideoId(activeClip.id);
-      const video = videoRefs.current[activeClip.id];
-      if (video) {
-        const relativeTime = currentTime - activeClip.startTime;
-        if (Math.abs(video.currentTime - relativeTime) > 0.1) {
-          video.currentTime = relativeTime;
-        }
-      }
-    } else {
+    if (videoClips.length === 0) {
       setActiveVideoId(null);
+      return;
     }
+
+    const sorted = [...videoClips].sort((a, b) => a.startTime - b.startTime);
+
+    // 1. Clip that directly covers current time
+    const coveringClip = sorted.find(
+      clip => currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration
+    );
+
+    if (coveringClip) {
+      setActiveVideoId(coveringClip.id);
+      const video = videoRefs.current[coveringClip.id];
+      if (video) {
+        const t = currentTime - coveringClip.startTime;
+        if (Math.abs(video.currentTime - t) > 0.1) video.currentTime = t;
+      }
+      return;
+    }
+
+    // 2. No clip at this time — virtually loop the full clip sequence so the
+    //    screen is never blank (handles gaps from manual drags AND audio longer than video).
+    const totalClipDuration = sorted.reduce((sum, c) => sum + c.duration, 0);
+    if (totalClipDuration <= 0) return;
+
+    // Map currentTime into [0, totalClipDuration) cyclically
+    const loopedTime = currentTime % totalClipDuration;
+    let elapsed = 0;
+    for (const clip of sorted) {
+      if (loopedTime >= elapsed && loopedTime < elapsed + clip.duration) {
+        setActiveVideoId(clip.id);
+        const video = videoRefs.current[clip.id];
+        if (video) {
+          const t = loopedTime - elapsed;
+          if (Math.abs(video.currentTime - t) > 0.1) video.currentTime = t;
+        }
+        return;
+      }
+      elapsed += clip.duration;
+    }
+
+    // Fallback: hold on the last frame of the last clip
+    const last = sorted[sorted.length - 1];
+    setActiveVideoId(last.id);
+    const lastVideo = videoRefs.current[last.id];
+    if (lastVideo) lastVideo.currentTime = last.duration;
   }, [currentTime, videoClips]);
 
   const handleVideoUpload = async (files: File[]) => {
@@ -122,7 +168,11 @@ export default function App() {
         const match = alignment.find(a => a.videoId === clip.id);
         return match ? { ...clip, startTime: match.startTime } : clip;
       });
-      setVideoClips(alignedClips);
+
+      // 5. Chain clips back-to-back (preserving AI order, closing all gaps).
+      //    The preview's virtual-looping handles any remaining time beyond the last clip,
+      //    so there is never a blank screen regardless of audio/video length mismatch.
+      setVideoClips(chainClips(alignedClips));
     } catch (error) {
       console.error("Alignment failed:", error);
       alert("Failed to align clips. Please try again.");

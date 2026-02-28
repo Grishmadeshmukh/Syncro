@@ -73,15 +73,20 @@ export async function suggestAlignment(
   videoClips: Array<{ id: string; name: string; analysis: string }>
 ): Promise<Array<{ videoId: string; startTime: number; reason: string }>> {
   const prompt = `
-    I have a voiceover with the following segments:
+    I have a voiceover with the following timed segments:
     ${JSON.stringify(voiceoverSegments)}
 
     And I have the following video clips with their descriptions:
     ${JSON.stringify(videoClips)}
 
-    Match each video clip to the most appropriate time in the voiceover based on the content.
-    Return a JSON array of objects with 'videoId', 'startTime', and 'reason'.
-    The 'startTime' should be the time in seconds when the video should start playing.
+    Your job is to ORDER the video clips so they play back-to-back with no gaps, covering
+    the voiceover from start to finish. The clips will be chained sequentially — there must
+    never be a blank screen. Choose the order that best matches each clip's content to the
+    relevant voiceover segment.
+
+    Return a JSON array sorted by intended playback order. Use 'startTime' to express the
+    order (e.g. 0 for the first clip, 1 for the second, etc. — the exact values will be
+    recomputed based on clip durations). Include a 'reason' explaining each placement.
   `;
 
   const response = await ai.models.generateContent({
