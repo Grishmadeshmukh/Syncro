@@ -40,20 +40,20 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         "relative group cursor-pointer border-2 border-dashed rounded-2xl p-8 transition-all duration-300",
         "flex flex-col items-center justify-center gap-4 text-center",
         isDragActive
-          ? "border-emerald-500 bg-emerald-50/50"
-          : "border-zinc-200 hover:border-zinc-400 bg-zinc-50/50 hover:bg-zinc-100/50"
+          ? "border-violet-400 bg-violet-500/20"
+          : "border-violet-700/50 hover:border-violet-500 bg-violet-900/20 hover:bg-violet-900/40"
       )}
     >
       <input {...getInputProps()} />
       <div className={cn(
         "p-4 rounded-full transition-transform duration-300 group-hover:scale-110",
-        isDragActive ? "bg-emerald-100 text-emerald-600" : "bg-zinc-100 text-zinc-500"
+        isDragActive ? "bg-violet-500/40 text-violet-200" : "bg-violet-800/50 text-violet-400"
       )}>
         {icon}
       </div>
       <div>
-        <p className="text-sm font-medium text-zinc-900">{label}</p>
-        <p className="text-xs text-zinc-500 mt-1">
+        <p className="text-sm font-medium text-violet-100">{label}</p>
+        <p className="text-xs text-violet-400 mt-1">
           {isDragActive ? "Drop files here" : "Drag & drop or click to select"}
         </p>
       </div>

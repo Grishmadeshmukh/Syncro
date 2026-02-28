@@ -44,9 +44,9 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (waveformRef.current && voiceover) {
       wavesurfer.current = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: '#10b981',
-        progressColor: '#059669',
-        cursorColor: '#141414',
+        waveColor: '#8b5cf6',
+        progressColor: '#a78bfa',
+        cursorColor: '#ffffff',
         barWidth: 2,
         barRadius: 3,
         height: 80,
@@ -134,16 +134,16 @@ export const Timeline: React.FC<TimelineProps> = ({
   };
 
   return (
-    <div className="bg-white border rounded-2xl overflow-hidden shadow-sm">
-      <div className="p-4 border-b flex items-center justify-between bg-zinc-50/50">
+    <div className="bg-black/90 border border-violet-800/40 rounded-2xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-violet-800/40 flex items-center justify-between bg-black/80">
         <div className="flex items-center gap-4">
           <button
             onClick={togglePlay}
-            className="p-2 rounded-full bg-zinc-900 text-white hover:bg-zinc-800 transition-colors"
+            className="p-2 rounded-full bg-violet-600 text-white hover:bg-violet-500 transition-colors"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
           </button>
-          <div className="text-sm font-mono text-zinc-500">
+          <div className="text-sm font-mono text-violet-400">
             {currentTime.toFixed(2)}s / {totalDuration.toFixed(2)}s
           </div>
         </div>
@@ -152,7 +152,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           disabled={isAligning || !voiceover || videoClips.length === 0}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all",
-            "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed",
+            "bg-violet-500 text-white hover:bg-violet-400 disabled:opacity-50 disabled:cursor-not-allowed",
             isAligning && "animate-pulse"
           )}
         >
@@ -164,22 +164,22 @@ export const Timeline: React.FC<TimelineProps> = ({
       <div
         ref={timelineContainerRef}
         className={cn(
-          "relative overflow-x-auto p-8 min-h-[300px] bg-zinc-50/30",
+          "relative overflow-x-auto p-8 min-h-[300px] bg-black/70",
           isDraggingPlayhead && "cursor-ew-resize select-none"
         )}
       >
         {/* Time Markers — click to seek */}
         <div
-          className="absolute top-0 left-8 right-8 h-6 border-b flex items-end cursor-pointer"
+          className="absolute top-0 left-8 right-8 h-6 border-b border-violet-700/50 flex items-end cursor-pointer"
           onClick={handleRulerClick}
         >
           {Array.from({ length: Math.ceil(totalDuration) + 5 }).map((_, i) => (
             <div
               key={i}
-              className="absolute border-l border-zinc-200 h-2"
+              className="absolute border-l border-violet-700/50 h-2"
               style={{ left: `${i * pixelsPerSecond}px` }}
             >
-              <span className="absolute -top-5 left-1 text-[10px] text-zinc-400 font-mono">
+              <span className="absolute -top-5 left-1 text-[10px] text-violet-500 font-mono">
                 {i}s
               </span>
             </div>
@@ -188,20 +188,20 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         {/* Playhead */}
         <div
-          className="absolute top-0 bottom-0 w-px bg-red-500 z-50"
+          className="absolute top-0 bottom-0 w-px bg-violet-400 z-50"
           style={{ left: `${8 + currentTime * pixelsPerSecond}px` }}
         >
           <div
-            className="absolute top-0 -left-1.5 w-3 h-3 bg-red-500 rounded-full cursor-ew-resize"
+            className="absolute top-0 -left-1.5 w-3 h-3 bg-violet-400 rounded-full cursor-ew-resize"
             onMouseDown={handlePlayheadMouseDown}
           />
         </div>
 
         <div className="relative mt-8 space-y-4" style={{ width: `${(totalDuration + 5) * pixelsPerSecond}px` }}>
           {/* Audio Track */}
-          <div className="relative h-20 bg-emerald-50/50 rounded-xl border border-emerald-100 overflow-hidden">
+          <div className="relative h-20 bg-black/50 rounded-xl border border-violet-700/40 overflow-hidden">
             <div className="absolute inset-0 opacity-50" ref={waveformRef} />
-            <div className="absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold text-emerald-600">
+            <div className="absolute top-2 left-2 text-[10px] uppercase tracking-wider font-bold text-violet-400">
               Voiceover Track
             </div>
           </div>
@@ -219,10 +219,10 @@ export const Timeline: React.FC<TimelineProps> = ({
                   }}
                   className={cn(
                     "absolute h-full rounded-xl border flex flex-col justify-center px-4 cursor-grab active:cursor-grabbing transition-shadow",
-                    "bg-white border-zinc-200 shadow-sm hover:shadow-md",
+                    "bg-violet-800/50 border-violet-600/50 shadow-sm hover:shadow-md",
                     currentTime >= clip.startTime && currentTime <= clip.startTime + clip.duration
-                      ? "border-emerald-500 ring-2 ring-emerald-500/20"
-                      : "border-zinc-200"
+                      ? "border-violet-400 ring-2 ring-violet-400/30"
+                      : "border-violet-600/50"
                   )}
                   style={{
                     left: `${clip.startTime * pixelsPerSecond}px`,
@@ -230,13 +230,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                   }}
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
-                    <Video className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                    <span className="text-xs font-medium text-zinc-700 truncate">
+                    <Video className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                    <span className="text-xs font-medium text-violet-200 truncate">
                       {clip.name}
                     </span>
                   </div>
                   {clip.analysis && (
-                    <div className="text-[10px] text-zinc-400 truncate mt-1 italic">
+                    <div className="text-[10px] text-violet-500 truncate mt-1 italic">
                       {clip.analysis}
                     </div>
                   )}
