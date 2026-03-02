@@ -1,5 +1,7 @@
 export type WorkflowMode = 'upload-both' | 'script-video' | 'video-only';
 
+export type TransitionType = 'cut' | 'fade' | 'dissolve' | 'wipe';
+
 export interface VideoClip {
   id: string;
   file: File;
@@ -11,6 +13,9 @@ export interface VideoClip {
   name: string;
   analysis?: string;
   textOverlay?: string;     // optional caption shown in preview while clip is active
+  track?: number;           // video track layer (0 = default, stacks vertically)
+  transitionIn?: TransitionType; // transition from the previous clip into this one
+  alternatives?: Array<{ id: string; confidence: number; reason: string }>; // AI-suggested alternative clips for this position
 }
 
 export interface Voiceover {

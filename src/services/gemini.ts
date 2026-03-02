@@ -1,14 +1,52 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, FileState } from "@google/genai";
+import { startLog, finishLog } from "./logger";
+import { getApiKey } from "./apiKey";
 
 function getAI() {
-  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('No Gemini API key set. Click the key icon in the header to add one.');
+  return new GoogleGenAI({ apiKey });
 }
 
-/** Convert raw PCM base64 (24kHz 16-bit mono) to a playable WAV blob URL */
+// -------------------------------------------------------------------
+// Files API — upload once, reuse URI across calls
+// Cache key: `${file.name}::${file.size}` (stable for same file object)
+// -------------------------------------------------------------------
+const fileUriCache = new Map<string, string>();
+
+async function getFileUri(file: File, logContext?: string): Promise<string> {
+  const cacheKey = `${file.name}::${file.size}`;
+  if (fileUriCache.has(cacheKey)) {
+    console.debug(`[gemini] reusing cached URI for "${file.name}"`);
+    return fileUriCache.get(cacheKey)!;
+  }
+
+  console.debug(`[gemini] uploading "${file.name}" (${(file.size / 1024).toFixed(1)} KB) via Files API…`);
+  const uploaded = await getAI().files.upload({ file, config: { mimeType: file.type, displayName: file.name } });
+
+  // Poll until ACTIVE (video/audio may take a few seconds to process)
+  let fileInfo = uploaded;
+  while (fileInfo.state === FileState.PROCESSING) {
+    await new Promise(r => setTimeout(r, 1500));
+    fileInfo = await getAI().files.get({ name: fileInfo.name! });
+  }
+
+  if (fileInfo.state === FileState.FAILED) {
+    throw new Error(`File upload failed for "${file.name}": ${fileInfo.error?.message ?? 'unknown'}`);
+  }
+
+  const uri = fileInfo.uri!;
+  fileUriCache.set(cacheKey, uri);
+  console.debug(`[gemini] uploaded "${file.name}" → ${uri}`);
+  return uri;
+}
+
+// -------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------
 function pcmBase64ToWavUrl(pcmBase64: string, sampleRate = 24000): string {
-  const pcm = Uint8Array.from(atob(pcmBase64), (c) => c.charCodeAt(0));
-  const numChannels = 1;
-  const bitsPerSample = 16;
+  const pcm = Uint8Array.from(atob(pcmBase64), c => c.charCodeAt(0));
+  const numChannels = 1, bitsPerSample = 16;
   const blockAlign = (numChannels * bitsPerSample) / 8;
   const byteRate = sampleRate * blockAlign;
   const dataSize = pcm.length;
@@ -26,223 +64,231 @@ function pcmBase64ToWavUrl(pcmBase64: string, sampleRate = 24000): string {
 }
 
 function getAudioDuration(url: string): Promise<number> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const a = new Audio(url);
     a.onloadedmetadata = () => resolve(a.duration);
     a.onerror = () => resolve(0);
   });
 }
 
-/**
- * Mode 2: Generate spoken audio from a script using Gemini TTS.
- * Returns a Voiceover object ready to be used in the timeline.
- */
+// -------------------------------------------------------------------
+// Public API functions
+// -------------------------------------------------------------------
+
 export async function generateAudioFromScript(
   script: string,
   voiceName = 'Aoede'
 ): Promise<{ url: string; duration: number; transcription: string }> {
-  const response = await getAI().models.generateContent({
-    model: 'gemini-2.5-flash-preview-tts',
-    contents: [{ parts: [{ text: script }] }],
-    config: {
-      responseModalities: ['AUDIO'] as any,
-      speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName } },
-      } as any,
-    },
-  });
+  const MODEL = 'gemini-2.5-flash-preview-tts';
+  const log = startLog('TTS Generate', MODEL, `voice=${voiceName} | "${script.slice(0, 80)}${script.length > 80 ? '…' : ''}"`);
+  try {
+    const response = await getAI().models.generateContent({
+      model: MODEL,
+      contents: [{ parts: [{ text: script }] }],
+      config: {
+        responseModalities: ['AUDIO'] as any,
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } } as any,
+      },
+    });
 
-  const part = response.candidates?.[0]?.content?.parts?.[0] as any;
-  if (!part?.inlineData?.data) throw new Error('No audio returned from TTS');
+    const part = response.candidates?.[0]?.content?.parts?.[0] as any;
+    if (!part?.inlineData?.data) throw new Error('No audio returned from TTS');
 
-  const url = pcmBase64ToWavUrl(part.inlineData.data);
-  const duration = await getAudioDuration(url);
-  return { url, duration, transcription: script };
+    const url = pcmBase64ToWavUrl(part.inlineData.data);
+    const duration = await getAudioDuration(url);
+    finishLog(log);
+    return { url, duration, transcription: script };
+  } catch (err: any) {
+    finishLog(log, err?.message ?? String(err));
+    throw err;
+  }
 }
 
-/**
- * Mode 3: Given analyzed video clips, generate a narration script using Gemini,
- * then synthesize it with TTS and return a complete Voiceover.
- */
 export async function generateNarrationFromVideos(
   videoClips: Array<{ name: string; analysis: string; duration: number }>,
   voiceName = 'Aoede'
 ): Promise<{ url: string; duration: number; transcription: string }> {
+  const MODEL = 'gemini-2.5-flash-lite';
   const totalDuration = videoClips.reduce((s, c) => s + c.duration, 0);
-
-  const scriptResponse = await getAI().models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `You are a documentary narrator. Based on these video clips, write a natural, engaging narration script.
+  const log = startLog('Generate Narration Script', MODEL, `${videoClips.length} clips | total ${totalDuration.toFixed(1)}s`);
+  try {
+    const scriptResponse = await getAI().models.generateContent({
+      model: MODEL,
+      contents: `You are a documentary narrator. Based on these video clips, write a natural, engaging narration script.
 The total video duration is ${totalDuration.toFixed(1)} seconds — keep your script roughly the same length when spoken at a natural pace.
 Do NOT include stage directions, timestamps, or labels. Output only the words to be spoken.
 
 Video clips:
 ${videoClips.map((c, i) => `Clip ${i + 1} (${c.duration.toFixed(1)}s) — "${c.name}": ${c.analysis}`).join('\n')}`,
-  });
+    });
 
-  const script = scriptResponse.text?.trim() || 'No narration could be generated.';
-  return generateAudioFromScript(script, voiceName);
+    const script = scriptResponse.text?.trim() || 'No narration could be generated.';
+    finishLog(log);
+    return generateAudioFromScript(script, voiceName);
+  } catch (err: any) {
+    finishLog(log, err?.message ?? String(err));
+    throw err;
+  }
 }
 
-export async function analyzeVoiceover(audioFile: File): Promise<{ transcription: string; segments: Array<{ text: string; start: number; end: number }> }> {
-  const base64Audio = await fileToBase64(audioFile);
+// Estimate segment timings locally — split text into sentences and distribute
+// total duration proportionally by character count. Fast (0 ms, no LLM call).
+export function estimateSegments(
+  text: string,
+  totalDuration: number
+): Array<{ text: string; start: number; end: number }> {
+  const sentences = (text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?\s][^.!?]*$/g) ?? [text])
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (sentences.length === 0) return [{ text, start: 0, end: totalDuration }];
 
-  // First, get the actual duration so we can validate/clamp timestamps
-  const audioBlobUrl = URL.createObjectURL(audioFile);
-  const totalDuration = await getAudioDuration(audioBlobUrl);
-  URL.revokeObjectURL(audioBlobUrl);
+  const totalChars = sentences.reduce((s, t) => s + t.length, 0);
+  const segments: Array<{ text: string; start: number; end: number }> = [];
+  let cursor = 0;
 
-  const response = await getAI().models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            mimeType: audioFile.type,
-            data: base64Audio,
-          },
-        },
-        {
-          text: `You are a precise audio transcription tool. Listen to this audio file carefully.
+  for (let i = 0; i < sentences.length; i++) {
+    const segDuration = (sentences[i].length / totalChars) * totalDuration;
+    const end = i === sentences.length - 1 ? totalDuration : parseFloat((cursor + segDuration).toFixed(3));
+    segments.push({ text: sentences[i], start: parseFloat(cursor.toFixed(3)), end });
+    cursor = end;
+  }
+  return segments;
+}
 
-The audio is exactly ${totalDuration.toFixed(2)} seconds long.
+export async function analyzeVoiceover(
+  audioFile: File
+): Promise<{ transcription: string; segments: Array<{ text: string; start: number; end: number }> }> {
+  // gemini-2.5-flash-lite: same model as analyzeVideo — fast, cheap
+  const MODEL = 'gemini-2.5-flash-lite';
+  const log = startLog('Analyze Voiceover', MODEL, audioFile.name);
+  try {
+    // Upload + measure duration in parallel
+    const audioBlobUrl = URL.createObjectURL(audioFile);
+    const [fileUri, totalDuration] = await Promise.all([
+      getFileUri(audioFile),
+      getAudioDuration(audioBlobUrl).finally(() => URL.revokeObjectURL(audioBlobUrl)),
+    ]);
 
-Transcribe every spoken word and split the transcript into natural sentence or phrase segments.
-For each segment provide the EXACT start and end time in seconds (use decimals, e.g. 3.45).
-- The first segment must start at or very close to 0.00
-- The last segment must end at or very close to ${totalDuration.toFixed(2)}
-- Segments must NOT overlap and must be in chronological order
-- Times must be realistic — do not guess; listen carefully to when speech starts and stops
-
-Return a JSON array of segments. Each segment has:
-- "text": the spoken words in that segment
-- "start": start time in seconds (number)
-- "end": end time in seconds (number)`,
-        },
-      ],
-    },
-    config: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            text: { type: Type.STRING },
-            start: { type: Type.NUMBER },
-            end: { type: Type.NUMBER },
-          },
-          required: ["text", "start", "end"],
-        },
+    // Ask only for transcription text — no timestamps, no schema, no JSON mode.
+    // Timestamps are estimated locally (estimateSegments) at zero extra cost.
+    const response = await getAI().models.generateContent({
+      model: MODEL,
+      contents: {
+        parts: [
+          { fileData: { mimeType: audioFile.type, fileUri } },
+          { text: 'Transcribe all spoken words in this audio exactly as spoken. Return only the transcription text with natural sentence punctuation. No labels, no timestamps, no commentary.' },
+        ],
       },
-    },
-  });
+      config: { temperature: 0 },
+    });
 
-  let segments: Array<{ text: string; start: number; end: number }> = JSON.parse(response.text || "[]");
-
-  // Clamp and sort just in case
-  segments = segments
-    .sort((a, b) => a.start - b.start)
-    .map(s => ({
-      ...s,
-      start: Math.max(0, Math.min(s.start, totalDuration)),
-      end: Math.max(0, Math.min(s.end, totalDuration)),
-    }));
-
-  const transcription = segments.map(s => s.text).join(" ");
-  return { transcription, segments };
+    const transcription = response.text?.trim() ?? '';
+    const segments = estimateSegments(transcription, totalDuration);
+    finishLog(log);
+    return { transcription, segments };
+  } catch (err: any) {
+    finishLog(log, err?.message ?? String(err));
+    throw err;
+  }
 }
 
 export async function analyzeVideo(videoFile: File): Promise<string> {
-  const base64Video = await fileToBase64(videoFile);
-  
-  const response = await getAI().models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: {
-      parts: [
-        {
-          inlineData: {
-            mimeType: videoFile.type,
-            data: base64Video,
-          },
-        },
-        {
-          text: "Describe the content of this video clip in detail. What is happening? What are the key visual elements?",
-        },
-      ],
-    },
-  });
+  const MODEL = 'gemini-2.5-flash-lite';
+  const log = startLog('Analyze Video', MODEL, videoFile.name);
+  try {
+    const fileUri = await getFileUri(videoFile);
 
-  return response.text || "No analysis available.";
+    const response = await getAI().models.generateContent({
+      model: MODEL,
+      contents: {
+        parts: [
+          { fileData: { mimeType: videoFile.type, fileUri } },
+          { text: 'Describe the content of this video clip in detail. What is happening? What are the key visual elements?' },
+        ],
+      },
+    });
+
+    const result = response.text || 'No analysis available.';
+    finishLog(log);
+    return result;
+  } catch (err: any) {
+    finishLog(log, err?.message ?? String(err));
+    throw err;
+  }
+}
+
+export interface AlignmentEntry {
+  id: string; // clip id for this position
+  alternatives: Array<{ id: string; confidence: number; reason: string }>;
 }
 
 export async function suggestAlignment(
-  voiceoverSegments: Array<{ text: string; start: number; end: number }>,
+  voiceoverTranscription: string,
   videoClips: Array<{ id: string; name: string; analysis: string; duration?: number }>
-): Promise<Array<{ videoId: string; startTime: number; reason: string }>> {
-  const totalVoiceDuration = voiceoverSegments.length > 0
-    ? voiceoverSegments[voiceoverSegments.length - 1].end
-    : 0;
+): Promise<AlignmentEntry[]> {
+  const MODEL = 'gemini-2.5-flash-lite';
+  const log = startLog('Suggest Alignment', MODEL, `${videoClips.length} clips`);
+  try {
+    const prompt = `You are an expert video editor. Your task is to arrange video clips into the best playback order so the visuals naturally illustrate a voiceover narration.
 
-  const prompt = `You are a video editor. Order and place each video clip on a timeline aligned to a voiceover, covering the full duration back-to-back with no gaps and no blank screen.
+VOICEOVER NARRATION (read this carefully — this is what will be heard):
+"""
+${voiceoverTranscription}
+"""
 
-VOICEOVER SEGMENTS (text with exact start/end times in seconds):
-${voiceoverSegments.map(s => `  [${s.start.toFixed(2)}s – ${s.end.toFixed(2)}s] "${s.text}"`).join('\n')}
+VIDEO CLIPS (each has an id, a name, and a description of its visual content):
+${videoClips.map((c, i) => `${i + 1}. id="${c.id}" | name="${c.name}" | duration=${(c.duration ?? 0).toFixed(2)}s\n   Visual content: ${c.analysis}`).join('\n\n')}
 
-Total voiceover duration: ${totalVoiceDuration.toFixed(2)} seconds
+TASK:
+Read the narration from start to finish. For each position in the playback sequence:
+1. Choose the clip whose visual content BEST matches that part of the narration.
+2. Also identify 1-2 alternative clips that could plausibly work at that position, with a confidence score (0.0–1.0) and a brief reason.
 
-VIDEO CLIPS (each must be placed exactly once):
-${videoClips.map(c => `  id=${c.id} | name="${c.name}" | duration=${(c.duration ?? 0).toFixed(2)}s | content: ${c.analysis}`).join('\n')}
+Rules:
+- Every clip must appear in the primary sequence exactly once.
+- Alternatives may reference ANY other clip (including ones used elsewhere in the primary sequence).
+- Order positions from first to last in playback order.
 
-RULES:
-1. Order clips so each clip's content matches the voiceover at that moment — use the segment timestamps as anchor points (a clip about topic X should start near when the voiceover first mentions X).
-2. Clips must be placed back-to-back with no gaps: the first clip starts at 0, each subsequent clip starts immediately after the previous one ends.
-3. Clips MUST NOT overlap. If clip A starts at T_a with duration D_a, clip B must start at T_a + D_a or later.
-4. Place clips in ascending order of startTime; earlier voiceover content = earlier clip.
-5. All clips together must span the full ${totalVoiceDuration.toFixed(2)}s — there must never be a blank screen.
+Return a JSON array with one object per position, each containing:
+- "id": the primary clip id for this position
+- "alternatives": array of { "id", "confidence" (0.0-1.0), "reason" (≤12 words) }`;
 
-Return a JSON array sorted by intended playback order with one object per clip containing "videoId", "startTime" (seconds, number), and "reason" (brief explanation).`;
-
-  const response = await getAI().models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            videoId: { type: Type.STRING },
-            startTime: { type: Type.NUMBER },
-            reason: { type: Type.STRING },
+    const response = await getAI().models.generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              alternatives: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    confidence: { type: Type.NUMBER },
+                    reason: { type: Type.STRING },
+                  },
+                  required: ['id', 'confidence', 'reason'],
+                },
+              },
+            },
+            required: ['id', 'alternatives'],
           },
-          required: ["videoId", "startTime", "reason"],
         },
       },
-    },
-  });
+    });
 
-  const results: Array<{ videoId: string; startTime: number; reason: string }> = JSON.parse(response.text || "[]");
-
-  // Clamp start times to valid range
-  return results.map(r => {
-    const clip = videoClips.find(c => c.id === r.videoId);
-    const maxStart = Math.max(0, totalVoiceDuration - (clip?.duration ?? 0));
-    return { ...r, startTime: Math.max(0, Math.min(r.startTime, maxStart)) };
-  });
-}
-
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      resolve(base64);
-    };
-    reader.onerror = (error) => reject(error);
-  });
+    const entries: AlignmentEntry[] = JSON.parse(response.text || '[]');
+    finishLog(log);
+    return entries;
+  } catch (err: any) {
+    finishLog(log, err?.message ?? String(err));
+    throw err;
+  }
 }
